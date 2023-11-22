@@ -1,6 +1,6 @@
 export interface Property {
   name: string,
-  type: string,
+  type: { type: string, value: any },
 }
 
 export interface Klass {
@@ -9,10 +9,13 @@ export interface Klass {
   datatypeProperties: Property[],
 }
 
-function propertyFromDeserialized(data: Map<string, string>): Property {
+function propertyFromDeserialized(data: Map<string, any>): Property {
   return {
     name: data.get("name")!,
-    type: data.get("type")!
+    type: {
+      type: data.get("type")!.get("type")!,
+      value: data.get("type")!.get("value")!
+    }
   };
 }
 

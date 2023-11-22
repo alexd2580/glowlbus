@@ -4,7 +4,7 @@ from owlready2 import swrl
 from io import BytesIO
 
 
-def loadOwl(path: str, view: memoryview):
+def load_owl(path: str, view: memoryview):
     """Load an ontology from a memoryview."""
     file_obj = BytesIO(view)
     ontology = owlready2.get_ontology(f"file://{path}").load(fileobj=file_obj)
@@ -12,44 +12,47 @@ def loadOwl(path: str, view: memoryview):
     klasses = list(extract_klasses(ontology))
     rules = list(extract_rules(ontology))
 
-    return {"classes": klasses, "rules": rules}
+    return {"base_iri": ontology.base_iri, "classes": klasses, "rules": rules}
+
+
+PRIMITIVES = (bool, str, int, float)
+
+rare = None
+def get_ontology_type(value):
+    if value in PRIMITIVES:
+        return {"type": "primitive", "value": value.__name__}
+    elif isinstance(value, PRIMITIVES):
+        return {"type": "value", "value": value}
+    elif hasattr(value, "name"):
+        return {"type": "class", "value": value.name}
+    elif isinstance(value, owlready2.class_construct.Or):
+        return {"type": "or", "value": [get_ontology_type(x) for x in value.Classes]}
+    else:
+        print("Unknown type: {value}")
+        return None
+
 
 
 def extract_klasses(ontology: owlready2.Ontology) -> Generator[dict, None, None]:
     for klass in ontology.classes():
-        # Collect properties.
         object_properties = []
         datatype_properties = []
+
+        properties = {
+            "ObjectProperty": object_properties,
+            "DatatypeProperty": datatype_properties,
+        }
 
         equiv_to = klass.equivalent_to
         if len(equiv_to) == 1:
             and_ = equiv_to[0]
             and_klasses = and_.Classes
-
             for and_klass in and_klasses:
-                prop = and_klass.property()
-
-                if len(prop.is_a) != 1:
-                    print("unexpected is_a", prop.is_a)
-                    continue
-                is_a = prop.is_a[0].name
-
-                relations = list(prop.get_relations())
-                if len(relations) != 1:
-                    print("unexpected relations", relations)
-                    continue
-
-                relation = relations[0]
-                if len(relation) != 2:
-                    print("unexpected relation", relation)
-                    continue
-
-                if is_a == "ObjectProperty":
-                    typ = relation[1]._name
-                    object_properties.append({ "name": prop._name, "type": typ })
-                elif is_a == "DatatypeProperty":
-                    typ = type(relation[1]).__name__
-                    datatype_properties.append({ "name": prop._name, "type": typ })
+                property = and_klass.property()
+                relation = property._name
+                typ = property.is_a[0].name
+                value = and_klass.value
+                properties[typ].append({ "name": relation, "type": get_ontology_type(value) })
 
         if len(equiv_to) > 1:
             print("Unexpected equiv_to", equiv_to)
@@ -59,13 +62,11 @@ def extract_klasses(ontology: owlready2.Ontology) -> Generator[dict, None, None]
             "object_properties": object_properties,
             "datatype_properties": datatype_properties,
         }
+        print()
 
 
-def handle_arguments(clause: swrl.Imp) -> list[Any]:
-    return [
-        {"variable": arg.name} if type(arg) == swrl.Variable else arg
-        for arg in clause.arguments
-    ]
+def handle_arguments(clause: swrl.Imp) -> list[str]:
+    return [f"'{arg}'" if type(arg) == str else (str(arg).lower() if type(arg) == bool else str(arg)) for arg in clause.arguments]
 
 
 def extract_clause(clause: swrl.Imp) -> Optional[dict[str, Any]]:
@@ -89,7 +90,7 @@ def extract_clause(clause: swrl.Imp) -> Optional[dict[str, Any]]:
     return {
         "type": typ,
         "name": name,
-        "arguments": handle_arguments(clause),
+        "args": handle_arguments(clause),
     }
 
 
@@ -99,7 +100,41 @@ def extract_rules(ontology: owlready2.Ontology) -> Generator[dict, None, None]:
         enabled = None if len(rule.isRuleEnabled) != 1 else rule.isRuleEnabled[0]
 
         yield {
-            "name": label,
+            "label": label,
             "enabled": enabled,
-            "clauses": [extract_clause(c) for c in rule.body],
+            "body": [extract_clause(c) for c in rule.body],
+            "head": [extract_clause(c) for c in rule.head],
         }
+
+def build_clause_string(clause: dict) -> str:
+    return f"{clause['name']}({', '.join(clause['args'])})"
+
+def build_rule_string(rule: dict) -> str:
+    body_clauses = (build_clause_string(c) for c in rule["body"])
+    head_clauses = (build_clause_string(c) for c in rule["head"])
+    return f"{', '.join(body_clauses)} -> {', '.join(head_clauses)}"
+
+def save_rules(base_iri: str, rules: list[dict], old_data: memoryview):
+    new_file_obj = BytesIO()
+
+    old_file_obj = BytesIO(old_data)
+    ontology = owlready2.get_ontology(base_iri).load(fileobj=old_file_obj)
+
+    with ontology:
+        # Delete all previous rules.
+        while rule := next(ontology.rules(), None):
+            owlready2.prop.destroy_entity(rule)
+
+        # Create all new rules.
+        for rule in rules:
+            imp = owlready2.swrl.Imp()
+
+            as_string = build_rule_string(rule)
+            print(as_string)
+            imp.set_as_rule(as_string)
+            imp.label = [rule["label"]]
+            imp.isRuleEnabled = rule["enabled"]
+
+        ontology.save(file=new_file_obj)
+
+    return new_file_obj

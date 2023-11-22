@@ -1,8 +1,6 @@
 import * as React from "react";
-import { Button, Container, Form, Grid, Menu } from "semantic-ui-react";
+import { Button, Card, Container, Form, Grid, Menu } from "semantic-ui-react";
 import * as R from "ramda";
-
-import { useObservable } from "./utils/use-unwrap";
 
 import { fileDialog } from "./models/file-dialog";
 import { owlFile } from "./models/owl-file";
@@ -10,55 +8,69 @@ import { owlFile } from "./models/owl-file";
 import { LoadingOverlay } from "./components/loading-overlay";
 import { KlassCard } from "./components/klass-card";
 import { RuleCard } from "./components/rule-card";
-import { LoadFile } from "./views/load-file";
+
+import { distinct, keys } from "./utils/operators";
+import { useObservable } from "./utils/use-unwrap";
+import { LoadFileButton } from "./components/load-file-button";
+import { SaveFileAsButton } from "./components/save-file-as-button";
 
 export const App = () => {
     const dialogVisible = useObservable(fileDialog.visible);
     const path = useObservable(owlFile.path);
-
     return (
-        <div style={{ display: "flex", flexFlow: "column nowrap" }}>
+        <>
             <Menu attached='top' inverted>
                 <Container>
-                    <Menu.Item onClick={loadFile}>
-                        Load File
-                    </Menu.Item>
-                    <Menu.Item onClick={saveFile}>
-                        Save File
-                    </Menu.Item>
+                    <Menu.Item as={LoadFileButton} />
+                    <Menu.Item as={SaveFileAsButton} />
                 </Container>
             </Menu>
-            <LoadingOverlay active={dialogVisible} style={{ backgroundColor: "#A5D8DD", padding: 0, flexGrow: 1 }}>
-                <Container fluid style={{ width: "90%", height: "100vh", backgroundColor: "transparent" }}>
+            <LoadingOverlay active={dialogVisible} style={{ backgroundColor: "#A5D8DD", padding: 0, margin: 0, height: "calc(100% - 40px)" }}>
+                <Container fluid style={{ width: "90%", height: "100%", backgroundColor: "transparent" }}>
                     {typeof path !== "undefined" ? <EditFile /> : <LoadFile />}
                 </Container>
             </LoadingOverlay>
-        </div>
+        </>
+    );
+};
+
+const LoadFile = () => {
+    return (
+        <Card>
+            <Card.Content>
+                <Card.Header>Hello</Card.Header>
+                <Card.Description>Now we're running python and semantic ui</Card.Description>
+            </Card.Content>
+            <Card.Content extra>
+                <LoadFileButton />
+            </Card.Content>
+        </Card>
     );
 };
 
 const EditFile = () => {
-    const klasses = useObservable(owlFile.klasses);
+    const klassIds = useObservable(owlFile.klasses.pipe(keys, distinct()));
     const ruleIds = useObservable(owlFile.rules.ids());
 
     const addRule = () => owlFile.rules.add({
-        name: "",
+        label: "",
         enabled: true,
         objektIds: [],
         relationIds: [],
+        head: [],
     });
 
     return (
         <Grid columns={2} style={{ margin: 0, height: "100%" }}>
-            <Grid.Column style={{ height: "100%", overflow: "scroll" }} width={4}>
+            <Grid.Column style={{ height: "100%", overflow: "scroll" }} width={5}>
                 {
-                    R.isEmpty(klasses)
+                    R.isEmpty(klassIds)
                         ? <p>No classes were loaded.</p>
-                        : Object.values(klasses).map((klass, index) => <KlassCard key={index} klass={klass} />)
+                        : klassIds.map(id => <KlassCard key={id} id={id} />)
                 }
             </Grid.Column>
 
-            <Grid.Column style={{ height: "100%", overflow: "scroll" }} width={12}>
+            <Grid.Column style={{ height: "100%", overflow: "scroll" }} width={11}>
                 {
                     R.isEmpty(ruleIds)
                         ? <p>No classes were loaded.</p>

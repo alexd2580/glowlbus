@@ -12,6 +12,7 @@ interface FileFilter {
 
 interface Electron {
     loadFile(filters: FileFilter[]): Promise<[filePath: string, data: Buffer] | undefined>;
+    saveFile(path: string, filters: Buffer[]): Promise<void>;
 }
 
 type PyValue = any;

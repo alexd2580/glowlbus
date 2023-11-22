@@ -1,22 +1,23 @@
 import * as React from "react";
-import { Button, Card } from "semantic-ui-react";
+import { ChangeEvent, useRef } from "react";
+import { Button } from "semantic-ui-react";
+
 import { owlFile } from "../models/owl-file";
 import { fileDialog } from "../models/file-dialog";
-import { ChangeEvent, useRef } from "react";
 
-const LoadFileButton = () => {
+const LoadFileElectron = () => {
     const onClick = async () => {
         const result = await fileDialog.selectViaElectron();
         if (!result) {
             return;
         }
-        owlFile.load(result[0], result[1]);
+        owlFile.importFromSerialized(result[0], result[1]);
     };
 
     return <Button basic color='green' icon="file" content="Load OWL" onClick={onClick} />;
 };
 
-const LoadFileField = () => {
+const LoadFileHtml = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const onChange = async (event: ChangeEvent) => {
         fileDialog.visible.next(false);
@@ -24,9 +25,9 @@ const LoadFileField = () => {
         const files = event.target && (event.target as HTMLInputElement).files;
         if (files && files.length === 1) {
             const file = files[0];
-            console.log(file);
             const buffer = await file.arrayBuffer();
-            owlFile.load(file.name, buffer);
+            console.log(file);
+            owlFile.importFromSerialized(file.name, buffer);
         }
     };
     const onCancel = () => {
@@ -54,19 +55,4 @@ const LoadFileField = () => {
     );
 };
 
-export const LoadFile = () => {
-    const insideElectron = typeof window.electron !== "undefined";
-
-    return (
-        <Card>
-            <Card.Content>
-                <Card.Header>Hello</Card.Header>
-                <Card.Description>Now we're running python and semantic ui</Card.Description>
-
-            </Card.Content>
-            <Card.Content extra>
-                {insideElectron ? <LoadFileButton /> : <LoadFileField />}
-            </Card.Content>
-        </Card>
-    );
-};
+export const LoadFileButton = () => typeof window.electron !== "undefined" ? <LoadFileElectron /> : <LoadFileHtml />;

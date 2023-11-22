@@ -44,6 +44,14 @@ async function loadFile(filters) {
 }
 
 /**
+ * Save binary data to a file.
+ */
+async function saveFile(path, data) {
+  await fs.promises.writeFile(path, data.data);
+}
+
+
+/**
   * Wait for electro initialization, then create the window.
   */
 app.whenReady().then(() => {
@@ -57,6 +65,7 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle("loadFile", (_event, filters) => loadFile(filters));
+  ipcMain.handle("saveFile", (_event, path, data) => saveFile(path, data));
 });
 
 /**

@@ -8,52 +8,137 @@ export const klasses = [
   },
   {
     "name": "Distance",
-    "objectProperties": [],
-    "datatypeProperties": []
+    "objectProperties": [
+      {
+        "name": "to",
+        "type": {
+          "type": "class",
+          "value": "SolidStructureOrObject"
+        }
+      }
+    ],
+    "datatypeProperties": [
+      {
+        "name": "distanceValue",
+        "type": {
+          "type": "primitive",
+          "value": "float"
+        }
+      }
+    ]
   },
   {
     "name": "DriverlessIndustrialTruck",
     "objectProperties": [
       {
         "name": "hasFuntion",
-        "type": "Personrec"
+        "type": {
+          "type": "class",
+          "value": "AutomaticRestart"
+        }
       },
       {
         "name": "hasFuntion",
-        "type": "Personrec"
+        "type": {
+          "type": "class",
+          "value": "PersonRecognition"
+        }
       },
       {
         "name": "hasFuntion",
-        "type": "Personrec"
+        "type": {
+          "type": "class",
+          "value": "StopFunction"
+        }
+      },
+      {
+        "name": "hasWarning",
+        "type": {
+          "type": "or",
+          "value": [
+            {},
+            {}
+          ]
+        }
+      },
+      {
+        "name": "has",
+        "type": {
+          "type": "class",
+          "value": "Distance"
+        }
       }
     ],
     "datatypeProperties": [
       {
         "name": "distanceFront",
-        "type": "float"
+        "type": {
+          "type": "primitive",
+          "value": "float"
+        }
       },
       {
         "name": "distanceToTheLeft",
-        "type": "float"
+        "type": {
+          "type": "primitive",
+          "value": "float"
+        }
       },
       {
         "name": "distanceToTheRight",
-        "type": "float"
+        "type": {
+          "type": "primitive",
+          "value": "float"
+        }
+      },
+      {
+        "name": "hasMaxSpeed",
+        "type": {
+          "type": "primitive",
+          "value": "float"
+        }
       }
     ]
   },
   {
     "name": "AutomaticRestart",
-    "objectProperties": [],
-    "datatypeProperties": []
+    "objectProperties": [
+      {
+        "name": "isPartOf",
+        "type": {
+          "type": "class",
+          "value": "DriverlessIndustrialTruck"
+        }
+      }
+    ],
+    "datatypeProperties": [
+      {
+        "name": "isAllowed",
+        "type": {
+          "type": "primitive",
+          "value": "bool"
+        }
+      }
+    ]
   },
   {
     "name": "AcousticalWarnings",
-    "objectProperties": [],
+    "objectProperties": [
+      {
+        "name": "isPartOf",
+        "type": {
+          "type": "class",
+          "value": "DriverlessIndustrialTruck"
+        }
+      }
+    ],
     "datatypeProperties": [
       {
         "name": "isActivatedAW",
-        "type": "bool"
+        "type": {
+          "type": "primitive",
+          "value": "bool"
+        }
       }
     ]
   },
@@ -74,28 +159,73 @@ export const klasses = [
   },
   {
     "name": "PersonRecognition",
-    "objectProperties": [],
+    "objectProperties": [
+      {
+        "name": "isPartOf",
+        "type": {
+          "type": "class",
+          "value": "DriverlessIndustrialTruck"
+        }
+      }
+    ],
     "datatypeProperties": [
       {
         "name": "isActivated",
-        "type": "bool"
+        "type": {
+          "type": "primitive",
+          "value": "bool"
+        }
       }
     ]
   },
   {
     "name": "StopFunction",
-    "objectProperties": [],
+    "objectProperties": [
+      {
+        "name": "isPartOf",
+        "type": {
+          "type": "class",
+          "value": "DriverlessIndustrialTruck"
+        }
+      }
+    ],
     "datatypeProperties": [
       {
         "name": "isActivated",
-        "type": "bool"
+        "type": {
+          "type": "primitive",
+          "value": "bool"
+        }
+      },
+      {
+        "name": "hasRange",
+        "type": {
+          "type": "value",
+          "value": 600
+        }
       }
     ]
   },
   {
     "name": "OpticalWarnings",
-    "objectProperties": [],
-    "datatypeProperties": []
+    "objectProperties": [
+      {
+        "name": "isPartOf",
+        "type": {
+          "type": "class",
+          "value": "DriverlessIndustrialTruck"
+        }
+      }
+    ],
+    "datatypeProperties": [
+      {
+        "name": "isActivatedOW",
+        "type": {
+          "type": "primitive",
+          "value": "bool"
+        }
+      }
+    ]
   }
 ];
 

@@ -1,15 +1,14 @@
-import { BehaviorSubject, Observable, combineLatestWith, distinctUntilChanged, filter, map } from "rxjs";
+import { BehaviorSubject, Observable, combineLatestWith, filter, map } from "rxjs";
 import { Klass, Property, klassFromDeserialized } from "./klass";
 import { Clause, Rule, Variable, ruleFromDeserialized } from "./rule";
-import { v4 as uuidv4 } from "uuid";
-import { klasses, rules } from "./test-data";
 import * as R from "ramda";
+import { distinct, filterUndefined } from "../utils/operators";
+import { Table, Set } from "../utils/observable-tables";
 
-function expectVariable(v: Variable): string {
-  if (typeof (v) !== "object" || !v?.variable) {
+function expectVariable(v: string) {
+  if (v?.[0] !== "?") {
     throw `Expected variable, got ${v}`;
   }
-  return v.variable;
 }
 
 export interface Condition {
@@ -34,95 +33,21 @@ export interface Relation {
   variables: string[],
 }
 
-export interface EnhancedRule extends Omit<Rule, "clauses"> {
+export interface EnhancedRule extends Omit<Rule, "body"> {
   objektIds: string[];
   relationIds: string[];
 }
 
-export class Set<T extends string> {
-  entities: BehaviorSubject<{ [id: string]: undefined }>;
-
-  constructor() {
-    this.entities = new BehaviorSubject({});
-  }
-
-  add(value: T) {
-    this.entities.next({ ...this.entities.getValue(), [value]: undefined });
-  }
-
-  values() {
-    return this.entities.pipe(
-      map(entities => Object.keys(entities)),
-    );
-  }
-}
-
-export class Table<T> {
-  entities: BehaviorSubject<{ [id: string]: T }>;
-
-  constructor() {
-    this.entities = new BehaviorSubject({});
-  }
-
-  ids(): Observable<string[]> {
-    // We need distinctUntilChanged so that changing changing entities doesn't trigger a rerender of the list.
-    return this.entities.pipe(
-      map(table => Object.keys(table)),
-      distinctUntilChanged((a, b) => R.equals(a, b))
-    );
-  }
-
-  byId(id: string): Observable<T>{
-    // We need distinctUntilChanged so that changing other entities doesn't trigger a rerender on every entity.
-    return this.entities.pipe(
-      map(table => table[id]),
-      filter(x => x !== undefined),
-      distinctUntilChanged((a, b) => R.equals(a, b))
-    );
-  }
-
-  get(id: string): T {
-    return this.entities.getValue()[id];
-  }
-
-  set(id: string, entity: T) {
-    const entities = this.entities.getValue();
-    entities[id] = entity;
-    this.entities.next(entities);
-  }
-
-  add(entity: T): string {
-    let id = uuidv4();
-    this.set(id, entity);
-    return id;
-  }
-
-  remove(id: string) {
-    this.entities.next(R.omit([id], this.entities.getValue()));
-  }
-
-  alter(id: string, f: (old: T) => T) {
-    const entities = this.entities.getValue();
-    entities[id] = f(entities[id]);
-    this.entities.next(entities);
-  }
-
-  alterField<K extends keyof T>(id: string, field: K, f: (old: T[K]) => T[K]) {
-    this.alter(id, (t: T) => ({ ...t, [field]: f(t[field]) }));
-  }
-
-  setField<K extends keyof T>(id: string, field: K, value: T[K]) {
-    this.alter(id, (t: T) => ({ ...t, [field]: value }));
-  }
-}
-
 export class OwlFile {
   path: BehaviorSubject<string | undefined>;
+  file_content: ArrayBuffer | undefined;
+  baseIri: string | undefined;
 
   // These are constant, just deserialized to give a better overview of the rule composition.
   klasses: BehaviorSubject<{ [className: string]: Klass }>;
 
   builtins: Set<string>;
+  relationFunctions: Set<string>;
 
   // A rule is composed of objekts (and their datavalues) and relations between objects.
   rules: Table<EnhancedRule>;
@@ -140,27 +65,41 @@ export class OwlFile {
   // Inter-object relations.
   relations: Table<Relation>;
 
+  hoveredObjekt: BehaviorSubject<string | undefined>;
+
   constructor() {
     this.path = new BehaviorSubject(undefined as string | undefined);
+    this.file_content = undefined;
+    this.baseIri = undefined;
 
     this.klasses = new BehaviorSubject({});
     this.builtins = new Set();
+    this.relationFunctions = new Set();
     this.rules = new Table();
     this.objekts = new Table();
     this.datavalues = new Table();
     this.datavaluesExpanded = new Table();
     this.conditions = new Table();
     this.relations = new Table();
+    this.hoveredObjekt = new BehaviorSubject(undefined as string | undefined);
 
     // TODO remove this.
-    this.path.next("lol.rofl");
-    this.importData(klasses, rules);
+    // this.path.next("lol.rofl");
+    // this.importData(klasses, rules);
+  }
+
+  hoveredKlass(): Observable<string | undefined> {
+    return this.hoveredObjekt.pipe(
+      combineLatestWith(this.objekts.entities),
+      map(([id, objekts]) => id && objekts[id]?.klass),
+      distinct()
+    );
   }
 
   datavalueConditions(datavalueId: string): Observable<Condition[]> {
     const { datavalues, conditions } = this;
     return datavalues.byId(datavalueId).pipe(
-      filter(x => x !== undefined),
+      filterUndefined(),
       map(x => x.conditionIds),
       combineLatestWith(conditions.entities),
       map(([ids, conditions]) => ids.map(id => conditions[id]))
@@ -170,7 +109,7 @@ export class OwlFile {
   datavalueOptions(objektId: string): Observable<string[]> {
     return this.objekts.byId(objektId).pipe(
       map(x => x?.klass),
-      filter(x => x !== undefined),
+      filterUndefined(),
       combineLatestWith(this.klasses),
       map(
         ([klassName, klasses]) => R.pipe(
@@ -196,8 +135,7 @@ export class OwlFile {
         ...oldKlass.datatypeProperties,
         {
           name,
-          type: "any"
-
+          type: { type: "primitive", value: "any" }
         }
       ]
     };
@@ -249,17 +187,13 @@ export class OwlFile {
 
   importConditionsForInstance(instance: string, builtinClauses: Clause[]): string[] {
     return builtinClauses
-      .filter(clause => clause.args[0]?.variable === instance)
+      .filter(clause => clause.args[0] === instance)
       .map(clause => {
         if (clause.args.length !== 2) {
           throw `Got wrong number of arguments for builtin: ${JSON.stringify(clause)}`;
         }
-        const valueOrVar = clause.args[1];
-        const isVariable = typeof valueOrVar === "object" && "variable" in valueOrVar;
-        const value = isVariable ? `?${valueOrVar.variable}` : valueOrVar?.toString() ?? undefined;
-
         this.builtins.add(clause.name);
-        return this.conditions.add({ builtin: clause.name, value });
+        return this.conditions.add({ builtin: clause.name, value: clause.args[1] });
       });
   }
 
@@ -271,15 +205,15 @@ export class OwlFile {
     }
 
     const varOrValue = datavalueClause.args[1];
-    if (typeof varOrValue === "object" && "variable" in varOrValue) {
+    if (varOrValue[0] === "?") {
       // We're dealing with a variable and some builting operators applied to it.
-      const instance = expectVariable(varOrValue);
+      const instance = varOrValue;
       return this.datavalues.add({
         field: datavalueClause.name,
         instance,
         conditionIds: this.importConditionsForInstance(instance, builtinClauses),
       });
-    } else if (typeof varOrValue !== "object") {
+    } else {
       // We're dealing with a value.
       this.builtins.add("exactly");
       return this.datavalues.add({
@@ -287,15 +221,12 @@ export class OwlFile {
         instance: undefined,
         conditionIds: [this.conditions.add({ builtin: "exactly", value: varOrValue?.toString() })]
       });
-    } else {
-      // It's an object (so a variable) but has no "variable" key.
-      throw `Unexpected datavalue clause: ${datavalueClause}`;
     }
   }
 
   importDatavaluesForObjekt(name: string, datavalueClauses: Clause[], builtinClauses: Clause[]): string[] {
     return datavalueClauses
-      .filter(clause => clause.args[0]?.variable === name)
+      .filter(clause => clause.args[0] === name)
       .map(datavalueClause => this.importDatavalue(datavalueClause, builtinClauses));
   }
 
@@ -305,7 +236,8 @@ export class OwlFile {
       throw `Unexpected multivariable class clause: ${objektClause}`;
     }
 
-    const name = expectVariable(args[0]);
+    const name = args[0];
+    expectVariable(name);
     const datavalueIds = this.importDatavaluesForObjekt(name, datavalueClauses, builtinClauses);
     return this.objekts.add({ name, klass, datavalueIds });
   }
@@ -315,17 +247,18 @@ export class OwlFile {
     if (type !== "property") {
       throw `Unexpected non-property relation clause: ${clause}`;
     }
-    return this.relations.add({ name, variables: args.map(x => x.variable) });
+    this.relationFunctions.add(name);
+    return this.relations.add({ name, variables: args });
   }
 
   importRule(rule: Rule) {
     const clauses: { [key: string]: Clause[] } = { class: [], datavalue: [], builtin: [], property: [] };
-    rule.clauses.forEach(clause => clauses[clause.type].push(clause));
+    rule.body.forEach(clause => clauses[clause.type].push(clause));
 
     let objektIds = clauses.class.map(objektClause => this.importObjekt(objektClause, clauses.datavalue, clauses.builtin));
     let relationIds = clauses.property.map(propertyClause => this.importRelation(propertyClause));
 
-    this.rules.add({ name: rule.name, enabled: rule.enabled, objektIds, relationIds });
+    this.rules.add({ label: rule.label, enabled: rule.enabled, objektIds, relationIds, head: rule.head });
   }
 
   importData(klasses: Klass[], rules: Rule[]) {
@@ -336,24 +269,76 @@ export class OwlFile {
   /**
     * Select a file path and get its contents.
     */
-  async load(path: string, content: ArrayBuffer) {
+  async importFromSerialized(path: string, content: ArrayBuffer) {
+    // TODO Clear all previous data.
+    this.file_content = content;
+
     this.path.next(path);
 
     // Convert data to python.
     const pyodide = window.pyscript.interpreter.interpreter;
     const locals = pyodide.toPy({ path, view: content });
 
-    const analyzedData = pyodide.runPython("loadOwl(path, view)", { locals }).toJs();
+    const analyzedData = pyodide.runPython("load_owl(path, view)", { locals }).toJs();
     const klasses = analyzedData.get("classes").map(klassFromDeserialized);
     const rules = analyzedData.get("rules").map(ruleFromDeserialized);
+
+    this.baseIri = analyzedData.get("base_iri");
     this.importData(klasses, rules);
   }
 
-  save() {
-    // const pyodide = window.pyscript.interpreter.interpreter;
-    // const locals = pyodide.toPy({ path: this.path, rules: this.rules.table.getValue() });
-    //
-    // pyodide.runPython("storeRules(path, rules)", { locals });
+  serializeCondition(instance: string, conditionId: string): Clause[] {
+    const { builtin, value } = this.conditions.get(conditionId);
+    return [
+      { type: "builtin", name: builtin, args: [instance, value] },
+    ];
+  }
+
+  serializeDatavalue(name: string, datavalueId: string): Clause[] {
+    const { field, instance, conditionIds } = this.datavalues.get(datavalueId);
+    if (conditionIds.length === 1) {
+      const { builtin, value } = this.conditions.get(conditionIds[0]);
+      if (builtin === "exactly") {
+        return [{ type: "datavalue", name: field, args: [name, value] }];
+      }
+    }
+    return [
+      { type: "datavalue", name: field, args: [name, instance] },
+      ...conditionIds.flatMap(id => this.serializeCondition(instance, id)),
+    ];
+  }
+
+  serializeObjekt(objektId: string): Clause[] {
+    const { name, klass, datavalueIds } = this.objekts.get(objektId);
+
+    return [
+      { type: "class", name: klass, args: [name] },
+      ...datavalueIds.flatMap(id => this.serializeDatavalue(name, id)),
+    ];
+  }
+
+  serializeRelation(relationId: string): Clause[] {
+    const { name, variables } = this.relations.get(relationId);
+    return [
+      { type: "property", name, args: variables }
+    ];
+  }
+
+  serialize(): Buffer {
+    const rules = Object.values(this.rules.entities.getValue()).map(rule => ({
+        label: rule.label,
+        enabled: rule.enabled,
+        body: [
+          ...rule.objektIds.flatMap(this.serializeObjekt.bind(this)),
+          ...rule.relationIds.flatMap(this.serializeRelation.bind(this)),
+        ],
+        head: rule.head,
+    }));
+
+    const pyodide = window.pyscript.interpreter.interpreter;
+    const locals = pyodide.toPy({ base_iri: this.baseIri, rules, old_data: this.file_content });
+    const result = pyodide.runPython("save_rules(base_iri, rules, old_data)", { locals }).toJs();
+    return result.getvalue().getBuffer(); // TODO this is not a `buffer`.
   }
 }
 

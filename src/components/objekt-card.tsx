@@ -1,12 +1,14 @@
 import * as React from "react";
 import { Accordion, Button, Card, DropdownItemProps, Form, Icon } from "semantic-ui-react";
-import { Condition, owlFile } from "../models/owl-file";
-import { useObservable, useObservableWithDefault } from "../utils/use-unwrap";
 import * as R from "ramda";
 import { map, filter } from "rxjs";
-import { IdProps, ParentProps } from "../utils/generic-props";
 
-const listAsOptions: (values: string[]) => { text: string, value: string }[] = R.map(v => ({ text: v, value: v }));
+import { Condition, owlFile } from "../models/owl-file";
+
+import { IdProps, ParentProps } from "../utils/generic-props";
+import { useObservable, useObservableWithDefault } from "../utils/use-unwrap";
+import { listAsOptions } from "../utils/list";
+
 function disableOption(option: string, options: DropdownItemProps[]): DropdownItemProps[] {
     return options.map(R.when(x => x.value === option, x => ({ ...x, disabled: true })));
 }
@@ -189,10 +191,15 @@ export const ObjektCard = ({ id, parentId }: IdProps & ParentProps) => {
         owlFile.objekts.alterField(id, "datavalueIds", R.append(newId));
     }
     const removeObjekt = () => owlFile.removeObjekt(id, parentId);
+    const setObjektHover = () => owlFile.hoveredObjekt.next(id);
     return (
-        <Card style={{ width: "100%" }}>
+        <Card
+            style={{ width: "100%" }}
+            onFocus={setObjektHover}
+            onMouseEnter={setObjektHover}
+        >
             {/* Generic objekt data. */}
-            <Card.Content header>
+            <Card.Content>
                 <Form size="large">
                     <Form.Group style={{ margin: "0" }}>
                         <Form.Dropdown
