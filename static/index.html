@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Interactive application window</title>
+
+    <!-- Load pyscript (WASM python interpreter). -->
+    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+    <!-- <script defer src="https://pyscript.net/latest/pyscript.js"></script> -->
+
+    <style>
+        body, #root {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Load the python App. -->
+    <!-- <py-config> -->
+    <!--     # sqlite3 is a non-standard dependency that needs to be specified explicitly. -->
+    <!--     # owlready doesn't have a wheel, so we use a third-party fork to install the wheel from. -->
+    <!--     packages = ["sqlite3", "static/Owlready2-0.25-py3-none-any.whl"] -->
+    <!-- </py-config> -->
+    <!-- <py-script src="static/index.py"></py-script> -->
+
+    <!-- Here's the actual website (powered by React). -->
+    <div id="root"></div>
+</body>
+
+</html>
