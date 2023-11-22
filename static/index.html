@@ -6,7 +6,7 @@
     <title>Interactive application window</title>
 
     <!-- Load pyscript (WASM python interpreter). -->
-    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+    <!-- <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" /> -->
     <script defer src="https://pyscript.net/latest/pyscript.js"></script>
 
     <style>
@@ -15,12 +15,15 @@
             height: 100%;
             overflow: hidden;
         }
+        #pyconfig {
+            display: none;
+        }
     </style>
 </head>
 
 <body>
     <!-- Load the python App. -->
-    <py-config>
+    <py-config id="pyconfig">
         # sqlite3 is a non-standard dependency that needs to be specified explicitly.
         # owlready doesn't have a wheel, so we use a third-party fork to install the wheel from.
         packages = ["sqlite3", "static/Owlready2-0.25-py3-none-any.whl"]

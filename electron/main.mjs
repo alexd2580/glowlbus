@@ -24,7 +24,7 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
-  mainWindow.webContents.openDevTools();
+  // mainWindow.webContents.openDevTools();
 }
 
 /**
@@ -78,4 +78,3 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
-

@@ -25,13 +25,10 @@ def get_ontology_type(value):
         return {"type": "value", "value": value}
     elif hasattr(value, "name"):
         return {"type": "class", "value": value.name}
-    elif isinstance(value, owlready2.class_construct.Or):
-        return {"type": "or", "value": [get_ontology_type(x) for x in value.Classes]}
     else:
         print("Unknown type: {value}")
         return None
-
-
+ 
 
 def extract_klasses(ontology: owlready2.Ontology) -> Generator[dict, None, None]:
     for klass in ontology.classes():
@@ -42,17 +39,21 @@ def extract_klasses(ontology: owlready2.Ontology) -> Generator[dict, None, None]
             "ObjectProperty": object_properties,
             "DatatypeProperty": datatype_properties,
         }
-
+        
         equiv_to = klass.equivalent_to
         if len(equiv_to) == 1:
-            and_ = equiv_to[0]
-            and_klasses = and_.Classes
-            for and_klass in and_klasses:
-                property = and_klass.property()
-                relation = property._name
-                typ = property.is_a[0].name
-                value = and_klass.value
-                properties[typ].append({ "name": relation, "type": get_ontology_type(value) })
+            queue = [equiv_to[0]]
+
+            while len(queue) > 0:
+                item = queue.pop()
+                if isinstance(item, (owlready2.class_construct.Or, owlready2.class_construct.And)):
+                    queue.extend(item.Classes)
+                else:
+                    property = item.property()
+                    relation = property._name
+                    typ = property.is_a[0].name
+                    value = item.value
+                    properties[typ].append({ "name": relation, "type": get_ontology_type(value) })
 
         if len(equiv_to) > 1:
             print("Unexpected equiv_to", equiv_to)
