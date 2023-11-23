@@ -13,6 +13,7 @@ export const RelationCard = ({ id, parentId }: IdProps & ParentProps) => {
     const { name, variables } = useObservable(owlFile.relations.byId(id));
     const options = useObservable(owlFile.relationFunctions.values().pipe(map(listAsOptions)));
 
+    const addRelation = (value: string) => owlFile.relationFunctions.add(value);
     const setRelation = (value: string) => owlFile.relations.setField(id, "name", value);
     const addVariable = (value: string) => owlFile.relations.alterField(id, "variables", R.append(value));
     const setVariable = (index: number, value: string) => owlFile.relations.alterField(id, "variables", R.update(index, value));
@@ -28,12 +29,14 @@ export const RelationCard = ({ id, parentId }: IdProps & ParentProps) => {
                 <Form size="small">
                     <Form.Dropdown
                         placeholder="Relation..."
+                        width={5}
                         fluid
                         search
                         selection
+                        allowAdditions
                         options={options}
-                        width={5}
                         value={name}
+                        onAddItem={(_, data) => addRelation(data.value as string)}
                         onChange={(_, data) => setRelation(data.value as string)}
                     />
                     <Form.Group widths="equal" style={{ margin: "0" }}>

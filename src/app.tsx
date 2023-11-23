@@ -57,7 +57,7 @@ const EditFile = () => {
         enabled: true,
         objektIds: [],
         relationIds: [],
-        head: [],
+        implicationIds: [],
     });
 
     return (

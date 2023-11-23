@@ -20,6 +20,10 @@ export class Set<T extends string> {
       map(entities => Object.keys(entities)),
     );
   }
+
+  clear() {
+    this.entities.next({});
+  }
 }
 
 export class Table<T> {
@@ -78,5 +82,9 @@ export class Table<T> {
 
   setField<K extends keyof T>(id: string, field: K, value: T[K]) {
     this.alter(id, (t: T) => ({ ...t, [field]: value }));
+  }
+
+  clear() {
+    this.entities.next({});
   }
 }

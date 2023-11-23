@@ -1,6 +1,6 @@
 import { BehaviorSubject, Observable, combineLatestWith, filter, map } from "rxjs";
 import { Klass, Property, klassFromDeserialized } from "./klass";
-import { Clause, Rule, Variable, ruleFromDeserialized } from "./rule";
+import { Clause, Rule, ruleFromDeserialized } from "./rule";
 import * as R from "ramda";
 import { distinct, filterUndefined } from "../utils/operators";
 import { Table, Set } from "../utils/observable-tables";
@@ -33,9 +33,15 @@ export interface Relation {
   variables: string[],
 }
 
-export interface EnhancedRule extends Omit<Rule, "body"> {
+export interface Implication {
+  name: string,
+  args: string[],
+}
+
+export interface EnhancedRule extends Omit<Rule, "body" | "head"> {
   objektIds: string[];
   relationIds: string[];
+  implicationIds: string[];
 }
 
 export class OwlFile {
@@ -65,6 +71,8 @@ export class OwlFile {
   // Inter-object relations.
   relations: Table<Relation>;
 
+  implications: Table<Implication>;
+
   hoveredObjekt: BehaviorSubject<string | undefined>;
 
   constructor() {
@@ -81,6 +89,8 @@ export class OwlFile {
     this.datavaluesExpanded = new Table();
     this.conditions = new Table();
     this.relations = new Table();
+    this.implications = new Table();
+
     this.hoveredObjekt = new BehaviorSubject(undefined as string | undefined);
 
     // TODO remove this.
@@ -109,15 +119,15 @@ export class OwlFile {
   datavalueOptions(objektId: string): Observable<string[]> {
     return this.objekts.byId(objektId).pipe(
       map(x => x?.klass),
-      filterUndefined(),
       combineLatestWith(this.klasses),
+      filter(([a, b]) => a !== undefined && b !== undefined),
       map(
         ([klassName, klasses]) => R.pipe(
           R.path([klassName as string, "datatypeProperties"]) as (x: typeof klasses) => Property[],
           R.pluck("name"),
         )(klasses) as string[] | undefined
       ),
-      filter(x => x !== undefined),
+      filterUndefined(),
     ) as Observable<string[]>;
   }
 
@@ -178,10 +188,20 @@ export class OwlFile {
     this.relations.remove(relationId);
   }
 
+  removeImplication(implicationId: string, parentId: string | undefined = undefined) {
+    console.log(implicationId, parentId);
+    if (parentId !== undefined) {
+      this.rules.alterField(parentId, "implicationIds", R.without([implicationId]));
+    }
+
+    this.implications.remove(implicationId);
+  }
+
   removeRule(ruleId: string) {
     const rule = this.rules.get(ruleId);
     rule.objektIds.forEach(id => this.removeObjekt(id));
     rule.relationIds.forEach(id => this.removeRelation(id));
+    rule.implicationIds.forEach(id => this.removeImplication(id));
     this.rules.remove(ruleId);
   }
 
@@ -243,12 +263,14 @@ export class OwlFile {
   }
 
   importRelation(clause: Clause): string {
-    const { type, name, args } = clause;
-    if (type !== "property") {
-      throw `Unexpected non-property relation clause: ${clause}`;
-    }
+    const { name, args } = clause;
     this.relationFunctions.add(name);
     return this.relations.add({ name, variables: args });
+  }
+
+  importImplication(clause: Clause): string {
+    const { name, args } = clause;
+    return this.implications.add({ name, args });
   }
 
   importRule(rule: Rule) {
@@ -257,8 +279,9 @@ export class OwlFile {
 
     let objektIds = clauses.class.map(objektClause => this.importObjekt(objektClause, clauses.datavalue, clauses.builtin));
     let relationIds = clauses.property.map(propertyClause => this.importRelation(propertyClause));
+    let implicationIds = rule.head.map(implicationClause => this.importImplication(implicationClause));
 
-    this.rules.add({ label: rule.label, enabled: rule.enabled, objektIds, relationIds, head: rule.head });
+    this.rules.add({ label: rule.label, enabled: rule.enabled, objektIds, relationIds, implicationIds });
   }
 
   importData(klasses: Klass[], rules: Rule[]) {
@@ -271,8 +294,26 @@ export class OwlFile {
     */
   async importFromSerialized(path: string, content: ArrayBuffer) {
     // TODO Clear all previous data.
-    this.file_content = content;
     this.path.next(path);
+    this.file_content = content;
+
+    this.klasses.next({});
+    this.builtins.clear();
+    this.relationFunctions.clear();
+    this.rules.clear();
+    this.objekts.clear();
+    this.datavalues.clear();
+    this.datavaluesExpanded.clear();
+    this.conditions.clear();
+    this.relations.clear();
+    this.implications.clear();
+
+    this.hoveredObjekt.next(undefined);;
+
+
+
+
+
 
     // Convert data to python.
     const pyodide = window.pyscript.interpreter.interpreter;
@@ -318,9 +359,12 @@ export class OwlFile {
 
   serializeRelation(relationId: string): Clause[] {
     const { name, variables } = this.relations.get(relationId);
-    return [
-      { type: "property", name, args: variables }
-    ];
+    return [{ type: "property", name, args: variables }];
+  }
+
+  serializeImplication(implicationId: string): Clause[] {
+    const { name, args } = this.implications.get(implicationId);
+    return [{ type: "unknown", name, args }];
   }
 
   serialize(): Buffer {
@@ -331,7 +375,7 @@ export class OwlFile {
           ...rule.objektIds.flatMap(this.serializeObjekt.bind(this)),
           ...rule.relationIds.flatMap(this.serializeRelation.bind(this)),
         ],
-        head: rule.head,
+        head: rule.implicationIds.flatMap(this.serializeImplication.bind(this)),
     }));
 
     const pyodide = window.pyscript.interpreter.interpreter;

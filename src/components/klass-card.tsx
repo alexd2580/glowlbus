@@ -15,9 +15,9 @@ export const KlassCard = ({ id }: KlassCardProps) => {
     const observable = owlFile.klasses.pipe(map(klasses => klasses[id]), distinct());
     const { name, objectProperties, datatypeProperties } = useObservable(observable);
     const highlight = name === useObservable(owlFile.hoveredKlass());
-    const style = highlight ? { backgroundColor: "#CFCFCF" } : {};
+    const highlightColor = highlight ? { backgroundColor: "#CFCFCF" } : {};
     return (
-        <Card style={{ width: "100%", ...style }}>
+        <Card style={{ width: "100%", transition: "background-color 0.5s ease", ...highlightColor }}>
             <Card.Content>
                 <Card.Header>
                     <span style={{ color: "grey" }}>Class: </span>

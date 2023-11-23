@@ -26,8 +26,11 @@ def get_ontology_type(value):
     elif hasattr(value, "name"):
         return {"type": "class", "value": value.name}
     else:
-        print("Unknown type: {value}")
+        print(f"Unknown type: {value}")
         return None
+
+
+COMPLEX_CLASSES = (owlready2.class_construct.Or, owlready2.class_construct.And)
 
 
 def extract_klasses(ontology: owlready2.Ontology) -> Generator[dict, None, None]:
@@ -47,14 +50,21 @@ def extract_klasses(ontology: owlready2.Ontology) -> Generator[dict, None, None]
 
             while len(queue) > 0:
                 item = queue.pop()
-                if isinstance(item, (owlready2.class_construct.Or, owlready2.class_construct.And)):
+                if isinstance(item, COMPLEX_CLASSES):
                     queue.extend(item.Classes)
                 else:
                     property = item.property()
                     relation = property._name
                     typ = property.is_a[0].name
                     value = item.value
-                    properties[typ].append({ "name": relation, "type": get_ontology_type(value) })
+
+                    queue2 = [value]
+                    while len(queue2) > 0:
+                        item2 = queue2.pop()
+                        if isinstance(item2, COMPLEX_CLASSES):
+                            queue2.extend(item2.Classes)
+                        else:
+                            properties[typ].append({ "name": relation, "type": get_ontology_type(item2) })
 
         if len(equiv_to) > 1:
             print("Unexpected equiv_to", equiv_to)
