@@ -272,7 +272,6 @@ export class OwlFile {
   async importFromSerialized(path: string, content: ArrayBuffer) {
     // TODO Clear all previous data.
     this.file_content = content;
-
     this.path.next(path);
 
     // Convert data to python.

@@ -28,9 +28,10 @@ def get_ontology_type(value):
     else:
         print("Unknown type: {value}")
         return None
- 
+
 
 def extract_klasses(ontology: owlready2.Ontology) -> Generator[dict, None, None]:
+    # TODO no idea what this is about, but for some ontologies, it fails to just read `Vessel` for example....
     for klass in ontology.classes():
         object_properties = []
         datatype_properties = []
@@ -39,7 +40,7 @@ def extract_klasses(ontology: owlready2.Ontology) -> Generator[dict, None, None]
             "ObjectProperty": object_properties,
             "DatatypeProperty": datatype_properties,
         }
-        
+
         equiv_to = klass.equivalent_to
         if len(equiv_to) == 1:
             queue = [equiv_to[0]]
@@ -63,7 +64,6 @@ def extract_klasses(ontology: owlready2.Ontology) -> Generator[dict, None, None]
             "object_properties": object_properties,
             "datatype_properties": datatype_properties,
         }
-        print()
 
 
 def handle_arguments(clause: swrl.Imp) -> list[str]:
@@ -131,7 +131,6 @@ def save_rules(base_iri: str, rules: list[dict], old_data: memoryview):
             imp = owlready2.swrl.Imp()
 
             as_string = build_rule_string(rule)
-            print(as_string)
             imp.set_as_rule(as_string)
             imp.label = [rule["label"]]
             imp.isRuleEnabled = rule["enabled"]
