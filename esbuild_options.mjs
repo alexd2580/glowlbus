@@ -29,7 +29,7 @@ export const esbuildOptions = {
       ]
     }),
     // Otherwise, TS is not checked.
-    typecheckPlugin()
+    typecheckPlugin({ watch: true })
   ],
   loader: {
     // We host a built wheel of owlready.

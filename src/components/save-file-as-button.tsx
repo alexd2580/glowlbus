@@ -1,21 +1,26 @@
 import * as React from "react";
 import { Button, Form, Modal } from "semantic-ui-react";
+import * as TypedAssert from "typed-assert";
 
 import { owlFile } from "../models/owl-file";
 import { useObservable } from "../utils/use-unwrap";
 
 async function saveFileElectron() {
     const path = owlFile.path.getValue();
+    TypedAssert.isNotUndefined(path);
     const serialized = owlFile.serialize();
 
-    await window.electron.saveFile(path, serialized);
+    const asBuffer = Buffer.from(serialized.buffer);
+    await window.electron.saveFile(path, asBuffer);
 }
 
 async function saveFileHtml() {
     const path = owlFile.path.getValue();
+    TypedAssert.isNotUndefined(path);
     const serialized = owlFile.serialize();
 
-    const downloadUrl = URL.createObjectURL(new Blob([serialized.data]));
+    const asBlob = new Blob([serialized.buffer]);
+    const downloadUrl = URL.createObjectURL(asBlob);
     const a = document.createElement('a');
     a.href = downloadUrl;
     a.download = path;

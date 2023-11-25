@@ -1,6 +1,7 @@
-import { distinctUntilChanged, filter, map } from "rxjs";
+import rxjs from "rxjs";
 import * as R from "ramda";
 
-export const keys = map((object: object) => Object.keys(object));
-export function distinct<T>() { return distinctUntilChanged<T>((a, b) => R.equals(a, b)); }
-export function filterUndefined<T>() { return filter<T>(x => x !== undefined); }
+export const keys = <T, K extends keyof T>() => rxjs.map((object: T) => Object.keys(object) as K[]);
+export const values = <T, K extends keyof T>() => rxjs.map((object: T) => Object.values(object) as T[K][]);
+export const distinctUntilChanged = <T,>() => rxjs.distinctUntilChanged<T>((a, b) => R.equals(a, b));
+export const filterUndefined = <T,>() => rxjs.filter<T>(x => x !== undefined);

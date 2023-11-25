@@ -125,7 +125,7 @@ def build_rule_string(rule: dict) -> str:
     head_clauses = (build_clause_string(c) for c in rule["head"])
     return f"{', '.join(body_clauses)} -> {', '.join(head_clauses)}"
 
-def save_rules(base_iri: str, rules: list[dict], old_data: memoryview):
+def save_rules(base_iri: str, rules: list[dict], old_data: memoryview) -> bytes:
     new_file_obj = BytesIO()
 
     old_file_obj = BytesIO(old_data)
@@ -147,4 +147,4 @@ def save_rules(base_iri: str, rules: list[dict], old_data: memoryview):
 
         ontology.save(file=new_file_obj)
 
-    return new_file_obj
+    return new_file_obj.getvalue()

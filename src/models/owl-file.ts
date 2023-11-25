@@ -367,7 +367,7 @@ export class OwlFile {
     return [{ type: "unknown", name, args }];
   }
 
-  serialize(): Buffer {
+  serialize(): Uint8Array {
     const rules = Object.values(this.rules.entities.getValue()).map(rule => ({
         label: rule.label,
         enabled: rule.enabled,
@@ -380,8 +380,7 @@ export class OwlFile {
 
     const pyodide = window.pyscript.interpreter.interpreter;
     const locals = pyodide.toPy({ base_iri: this.baseIri, rules, old_data: this.file_content });
-    const result = pyodide.runPython("save_rules(base_iri, rules, old_data)", { locals }).toJs();
-    return result.getvalue().getBuffer(); // TODO this is not a `buffer`.
+    return pyodide.runPython("save_rules(base_iri, rules, old_data)", { locals }).toJs();
   }
 }
 

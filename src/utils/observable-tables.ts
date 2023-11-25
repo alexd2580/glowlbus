@@ -2,10 +2,10 @@ import { BehaviorSubject, Observable, map } from "rxjs";
 import { v4 as uuidv4 } from "uuid";
 import * as R from "ramda";
 
-import { distinct, filterUndefined } from "../utils/operators";
+import { keys, values, distinctUntilChanged, filterUndefined } from "../utils/operators";
 
 export class Set<T extends string> {
-  entities: BehaviorSubject<{ [id: string]: undefined }>;
+  entities: BehaviorSubject<{ [id in T]: undefined }>;
 
   constructor() {
     this.entities = new BehaviorSubject({});
@@ -26,19 +26,20 @@ export class Set<T extends string> {
   }
 }
 
-export class Table<T> {
-  entities: BehaviorSubject<{ [id: string]: T }>;
+export class Table<Id extends string, Value> {
+  entries: BehaviorSubject<Partial<Record<Id, Value>>>;
 
   constructor() {
-    this.entities = new BehaviorSubject({});
+    this.entries = new BehaviorSubject({});
   }
 
-  ids(): Observable<string[]> {
-    // We need distinctUntilChanged so that changing changing entities doesn't trigger a rerender of the list.
-    return this.entities.pipe(
-      map(table => Object.keys(table)),
-      distinct()
-    );
+  keys(): Observable<Id[]> {
+    // We need distinctUntilChanged so that changing entities doesn't trigger a rerender of the list.
+    return this.entries.pipe(keys(), distinctUntilChanged());
+  }
+
+  values(): Observable<Value[]> {
+    return this.entries.pipe(values(), distinctUntilChanged());
   }
 
   byId(id: string): Observable<T> {
