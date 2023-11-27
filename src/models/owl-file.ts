@@ -2,46 +2,14 @@ import { BehaviorSubject, Observable, combineLatestWith, filter, map } from "rxj
 import { Klass, Property, klassFromDeserialized } from "./klass";
 import { Clause, Rule, ruleFromDeserialized } from "./rule";
 import * as R from "ramda";
-import { distinct, filterUndefined } from "../utils/operators";
-import { Table, Set } from "../utils/observable-tables";
+import { filterUndefined } from "../utils/operators";
+import { Map, Table, Set } from "../utils/observable-tables";
+import { Condition, Datavalue, EnhancedRule, Implication, Objekt, Relation } from "./interfaces";
 
 function expectVariable(v: string) {
   if (v?.[0] !== "?") {
     throw `Expected variable, got ${v}`;
   }
-}
-
-export interface Condition {
-  builtin: string | "exactly" | undefined,
-  value: string | undefined
-};
-
-export interface Datavalue {
-  field: string | undefined,
-  instance: string | undefined,
-  conditionIds: string[],
-}
-
-export interface Objekt {
-  name: string | undefined,
-  klass: string | undefined,
-  datavalueIds: string[],
-}
-
-export interface Relation {
-  name: string | undefined,
-  variables: string[],
-}
-
-export interface Implication {
-  name: string,
-  args: string[],
-}
-
-export interface EnhancedRule extends Omit<Rule, "body" | "head"> {
-  objektIds: string[];
-  relationIds: string[];
-  implicationIds: string[];
 }
 
 export class OwlFile {
@@ -50,28 +18,28 @@ export class OwlFile {
   baseIri: string | undefined;
 
   // These are constant, just deserialized to give a better overview of the rule composition.
-  klasses: BehaviorSubject<{ [className: string]: Klass }>;
+  klasses: Map<string, Klass>;
 
   builtins: Set<string>;
   relationFunctions: Set<string>;
 
   // A rule is composed of objekts (and their datavalues) and relations between objects.
-  rules: Table<EnhancedRule>;
+  rules: Table<string, EnhancedRule>;
 
   // Instances of classes.
-  objekts: Table<Objekt>;
+  objekts: Table<string, Objekt>;
 
   // Members of instances.
-  datavalues: Table<Datavalue>;
-  datavaluesExpanded: Table<boolean>;
+  datavalues: Table<string, Datavalue>;
+  datavaluesExpanded: Map<string, boolean>;
 
   // Conditions of members.
-  conditions: Table<Condition>;
+  conditions: Table<string, Condition>;
 
   // Inter-object relations.
-  relations: Table<Relation>;
+  relations: Table<string, Relation>;
 
-  implications: Table<Implication>;
+  implications: Table<string, Implication>;
 
   hoveredObjekt: BehaviorSubject<string | undefined>;
 
@@ -80,13 +48,13 @@ export class OwlFile {
     this.file_content = undefined;
     this.baseIri = undefined;
 
-    this.klasses = new BehaviorSubject({});
+    this.klasses = new Map();
     this.builtins = new Set();
     this.relationFunctions = new Set();
     this.rules = new Table();
     this.objekts = new Table();
     this.datavalues = new Table();
-    this.datavaluesExpanded = new Table();
+    this.datavaluesExpanded = new Map();
     this.conditions = new Table();
     this.relations = new Table();
     this.implications = new Table();
@@ -205,6 +173,21 @@ export class OwlFile {
     this.rules.remove(ruleId);
   }
 
+  clear() {
+    this.klasses.clear();
+    this.builtins.clear();
+    this.relationFunctions.clear();
+    this.rules.clear();
+    this.objekts.clear();
+    this.datavalues.clear();
+    this.datavaluesExpanded.clear();
+    this.conditions.clear();
+    this.relations.clear();
+    this.implications.clear();
+
+    this.hoveredObjekt.next(undefined);
+  }
+
   importConditionsForInstance(instance: string, builtinClauses: Clause[]): string[] {
     return builtinClauses
       .filter(clause => clause.args[0] === instance)
@@ -297,22 +280,7 @@ export class OwlFile {
     this.path.next(path);
     this.file_content = content;
 
-    this.klasses.next({});
-    this.builtins.clear();
-    this.relationFunctions.clear();
-    this.rules.clear();
-    this.objekts.clear();
-    this.datavalues.clear();
-    this.datavaluesExpanded.clear();
-    this.conditions.clear();
-    this.relations.clear();
-    this.implications.clear();
-
-    this.hoveredObjekt.next(undefined);;
-
-
-
-
+    this.clear();
 
 
     // Convert data to python.

@@ -1,39 +1,17 @@
-import { BehaviorSubject, Observable, map } from "rxjs";
+import { BehaviorSubject, Observable } from "rxjs";
 import { v4 as uuidv4 } from "uuid";
 import * as R from "ramda";
 
-import { keys, values, distinctUntilChanged, filterUndefined } from "../utils/operators";
+import { keys, values, distinctUntilChanged, filterUndefined, prop } from "../utils/operators";
 
-export class Set<T extends string> {
-  entities: BehaviorSubject<{ [id in T]: undefined }>;
-
-  constructor() {
-    this.entities = new BehaviorSubject({});
-  }
-
-  add(value: T) {
-    this.entities.next({ ...this.entities.getValue(), [value]: undefined });
-  }
-
-  values() {
-    return this.entities.pipe(
-      map(entities => Object.keys(entities)),
-    );
-  }
-
-  clear() {
-    this.entities.next({});
-  }
-}
-
-export class Table<Id extends string, Value> {
-  entries: BehaviorSubject<Partial<Record<Id, Value>>>;
+export class Map<Id extends string | number | symbol, Value> {
+  entries: BehaviorSubject<{ [key in Key]?: Value; }>;
 
   constructor() {
     this.entries = new BehaviorSubject({});
   }
 
-  keys(): Observable<Id[]> {
+  keys(): Observable<Key[]> {
     // We need distinctUntilChanged so that changing entities doesn't trigger a rerender of the list.
     return this.entries.pipe(keys(), distinctUntilChanged());
   }
@@ -42,50 +20,51 @@ export class Table<Id extends string, Value> {
     return this.entries.pipe(values(), distinctUntilChanged());
   }
 
-  byId(id: string): Observable<T> {
+  byId(key: Key): Observable<Value> {
     // We need distinctUntilChanged so that changing other entities doesn't trigger a rerender on every entity.
-    return this.entities.pipe(
-      map(table => table[id]),
-      filterUndefined(),
-      distinct()
-    );
+    return this.entries.pipe(prop(key), filterUndefined(), distinctUntilChanged());
   }
 
-  get(id: string): T {
-    return this.entities.getValue()[id];
+  get(key: Key): Value | undefined {
+    return this.entries.getValue()[key];
   }
 
-  set(id: string, entity: T) {
-    const entities = this.entities.getValue();
-    entities[id] = entity;
-    this.entities.next(entities);
+  set(key: Key, entity: Value) {
+    const entities = this.entries.getValue();
+    entities[key] = entity;
+    this.entries.next(entities);
   }
 
-  add(entity: T): string {
-    let id = uuidv4();
+  remove(key: Key) {
+    // TODO fix typings.
+    this.entries.next(R.omit([key as string], this.entries.getValue()) as { [key in Key]?: Value; });
+  }
+
+  alter(key: Key, f: (old: Value | undefined) => Value | undefined) {
+    const entries = this.entries.getValue();
+    entries[key] = f(entries[key]);
+    this.entries.next(entries);
+  }
+
+  clear() {
+    this.entries.next({});
+  }
+}
+
+export class Table<Id extends string | number | symbol, Value> extends Map<Id, Value> {
+  add(entity: Value): Id {
+    let id = uuidv4() as Id; // TODO type this properly
     this.set(id, entity);
     return id;
   }
 
-  remove(id: string) {
-    this.entities.next(R.omit([id], this.entities.getValue()));
+  alterField<K extends keyof Value>(id: Id, field: K, f: (old: Value[K]) => Value[K]) {
+    this.alter(id, (t: Value | undefined) => t && ({ ...t, [field]: f(t[field]) }));
   }
 
-  alter(id: string, f: (old: T) => T) {
-    const entities = this.entities.getValue();
-    entities[id] = f(entities[id]);
-    this.entities.next(entities);
-  }
-
-  alterField<K extends keyof T>(id: string, field: K, f: (old: T[K]) => T[K]) {
-    this.alter(id, (t: T) => ({ ...t, [field]: f(t[field]) }));
-  }
-
-  setField<K extends keyof T>(id: string, field: K, value: T[K]) {
-    this.alter(id, (t: T) => ({ ...t, [field]: value }));
-  }
-
-  clear() {
-    this.entities.next({});
+  setField<K extends keyof Value>(id: Id, field: K, value: Value[K]) {
+    this.alter(id, (t: Value | undefined) => t && ({ ...t, [field]: value }));
   }
 }
+
+export class Set<Value extends string | number | symbol> extends Map<Value, undefined> { };
