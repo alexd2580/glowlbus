@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Button, Card, Container, Form, Grid, Menu } from "semantic-ui-react";
+import { Button, Card, CardProps, Container, Form, Grid, Menu } from "semantic-ui-react";
 import * as R from "ramda";
 
 import { fileDialog } from "./models/file-dialog";
@@ -12,6 +12,7 @@ import { LoadFileButton } from "./components/load-file-button";
 import { SaveFileAsButton } from "./components/save-file-as-button";
 
 import { useObservable } from "./utils/use-observable";
+import { useEffect, useRef } from "react";
 
 export const App = () => {
     const dialogVisible = useObservable(fileDialog.visible);
@@ -49,15 +50,27 @@ const LoadFile = () => {
 
 const EditFile = () => {
     const klassIds = useObservable(owlFile.klasses.keys());
+    const ref = useRef(null);
+    const klassIndices = Object.fromEntries(klassIds.map((id, index) => [id, index]));
+
+    useEffect(() => {
+        const subscription = owlFile.hoveredKlass().subscribe((hovered) => {
+            hovered && (ref.current as HTMLDivElement | null)?.children[klassIndices[hovered]].scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+        return () => subscription.unsubscribe();
+    }, [ref]);
+
     const ruleIds = useObservable(owlFile.rules.keys());
     return (
         <Grid columns={2} style={{ margin: 0, height: "100%" }}>
             <Grid.Column style={{ height: "100%", overflow: "scroll" }} width={5}>
-                {
-                    R.isEmpty(klassIds)
-                        ? <p>No classes loaded.</p>
-                        : klassIds.map(id => <KlassCard key={id} id={id} />)
-                }
+                <div ref={ref}>
+                    {
+                        R.isEmpty(klassIds)
+                            ? <p>No classes loaded.</p>
+                            : klassIds.map(id => <KlassCard key={id} id={id} />)
+                    }
+                </div>
             </Grid.Column>
 
             <Grid.Column style={{ height: "100%", overflow: "scroll" }} width={11}>
