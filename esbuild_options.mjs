@@ -1,7 +1,7 @@
 import { htmlPlugin } from "@craftamap/esbuild-plugin-html";
 import { typecheckPlugin } from "@jgoz/esbuild-plugin-typecheck";
 
-export const esbuildOptions = {
+export const esbuildOptions = watch => ({
   bundle: true,
   sourcemap: true,
   allowOverwrite: true,
@@ -29,7 +29,7 @@ export const esbuildOptions = {
       ]
     }),
     // Otherwise, TS is not checked.
-    typecheckPlugin({ watch: true })
+    typecheckPlugin({ watch })
   ],
   loader: {
     // We host a built wheel of owlready.
@@ -45,4 +45,4 @@ export const esbuildOptions = {
     '.svg': 'dataurl',
   },
   logLevel: "debug",
-};
+});

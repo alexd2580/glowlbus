@@ -3,7 +3,7 @@ import * as esbuildServer from "esbuild-server";
 import { esbuildOptions } from "./esbuild_options.mjs";
 
 esbuildServer.createServer({
-  ...esbuildOptions,
+  ...esbuildOptions(true),
   minify: false,
 }, {
   static: "dist/",
