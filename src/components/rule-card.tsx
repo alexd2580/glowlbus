@@ -7,111 +7,77 @@ import { owlFile } from "../models/owl-file";
 import { ObjektCard } from "./objekt-card";
 import { RelationCard } from "./relation-card";
 
-import { useObservable } from "../utils/use-unwrap";
-import { IdProps, ParentProps } from "../utils/generic-props";
+import { useObservable } from "../utils/use-observable";
+import { ID } from "../utils/id";
+import { Input } from "./input";
 
-const isSome = (thing: any) => R.isNotNil(thing) && !R.isEmpty(thing);
-
-const ImplicationForm = ({ id, parentId }: IdProps & ParentProps) => {
+const ImplicationForm = ({ id, ruleId }: { id: ID<"Implication">, ruleId: ID<"Rule"> }) => {
     const { name, args } = useObservable(owlFile.implications.byId(id));
+
     const setName = (value: string) => owlFile.implications.setField(id, "name", value);
-    const setArg = (index: number, value: string) => owlFile.implications.alterField(id, "args", R.update(index, value));
-    const addArg = (value: string | undefined) => {
-        if (isSome(value)) {
+    const setArg = (index: number) => (value: string) => owlFile.implications.alterField(id, "args", R.update(index, value));
+    const addArg = (value: string) => {
+        if (value !== "") {
             owlFile.implications.alterField(id, "args", R.append(value));
         }
     };
-    const removeIfEmptyLast = (index: number, value: string) => {
-        if (R.isEmpty(value)) {
+    const removeIfEmptyLast = (index: number) => (value: string) => {
+        if (value === "") {
             owlFile.implications.alterField(id, "args", R.remove(index, 1));
         }
     };
-    const removeImplication = () => owlFile.removeImplication(id, parentId);
+    const removeImplication = () => owlFile.removeImplication(id, ruleId);
     return (
         <Form>
             <Form.Group widths="equal" style={{ alignItems: "center" }}>
-                <Form.Input
+                <Input
                     key="-"
-                    placeholder="Name..."
                     fluid
+                    placeholder="Name..."
                     value={name}
-                    onChange={event => setName(event.target.value)}
+                    onChange={setName}
                 />
                 ({args.map((arg, index) => (
                     <>
-                        <Form.Input
+                        <Input
                             key={index}
-                            placeholder='Argument...'
                             fluid
+                            placeholder='Argument...'
                             value={arg}
-                            onChange={event => setArg(index, event.target.value)}
-                            onBlur={event => removeIfEmptyLast(index, event.target.value as string)}
+                            onChange={setArg(index)}
+                            onBlur={removeIfEmptyLast(index)}
                         />,
                     </>
                 ))}
-                <Form.Input
-                    key={args.length}
-                    fluid
-                    placeholder='Add argument...'
-                    onBlur={event => addArg(event.target.value)}
-                />)
-                <Form.Button
-                    icon='x'
-                    color="red"
-                    onClick={removeImplication}
-                />
-
+                <Input key={args.length} fluid placeholder='Add argument...' onBlur={addArg} />)
+                <Form.Button icon='x' color="red" onClick={removeImplication} />
             </Form.Group>
         </Form>
     );
 };
 
-const AddImplicationForm = ({ parentId }: ParentProps) => {
-    const addImplication = (name: string | undefined, arg: string | undefined) => {
-        if (isSome(name) || isSome(arg)) {
-            const newId = owlFile.implications.add({ name: name ?? "", args: [arg ?? ""] });
-            owlFile.rules.alterField(parentId, "implicationIds", R.append(newId));
+const AddImplicationForm = ({ ruleId }: { ruleId: ID<"Rule"> }) => {
+    const addImplication = (name: string, arg: string) => {
+        if (name !== "" || arg !== "") {
+            owlFile.addImplication(ruleId, { name: name ?? "", args: [arg ?? ""] });
         }
     };
     return (
         <Form>
             <Form.Group widths="equal" style={{ alignItems: "center" }}>
-                <Form.Input
-                    placeholder="Name..."
-                    fluid
-                    onBlur={event => addImplication(event.target.value, undefined)}
-                />
-                (
-                <Form.Input
-                    placeholder='Argument...'
-                    fluid
-                    onBlur={event => addImplication(undefined, event.target.value)}
-                />
-                )
+                <Input placeholder="Name..." fluid onBlur={value => addImplication(value, "")} />
+                (<Input placeholder='Argument...' fluid onBlur={value => addImplication("", value)} />)
             </Form.Group>
         </Form>
     );
 };
 
-export const RuleCard = ({ id }: IdProps) => {
+export const RuleCard = ({ id }: { id: ID<"Rule"> }) => {
     const { label, objektIds, relationIds, implicationIds } = useObservable(owlFile.rules.byId(id));
-    const setLabel = (value: string) => owlFile.rules.setField(id, "label", value);
 
-    const addObjekt = () => {
-        const newId = owlFile.objekts.add({
-            name: "",
-            klass: undefined,
-            datavalueIds: []
-        });
-        owlFile.rules.alterField(id, "objektIds", R.append(newId));
-    }
-    const addRelation = () => {
-        const newId = owlFile.relations.add({
-            name: undefined,
-            variables: [],
-        });
-        owlFile.rules.alterField(id, "relationIds", R.append(newId));
-    }
+    const setLabel = (value: string) => owlFile.rules.setField(id, "label", value);
+    const addObjekt = () => owlFile.addObjekt(id);
+    const addRelation = () => owlFile.addRelation(id);
     const removeRule = () => owlFile.removeRule(id);
 
     return (
@@ -132,13 +98,13 @@ export const RuleCard = ({ id }: IdProps) => {
             {/* Objekts. */}
             <Card.Content>
                 <h3>Objects</h3>
-                {objektIds.map(oId => <ObjektCard key={oId} id={oId} parentId={id} />)}
+                {objektIds.map(oId => <ObjektCard key={oId} id={oId} ruleId={id} />)}
             </Card.Content>
 
             {/* Relations. */}
             <Card.Content>
                 <h3>Relations</h3>
-                {relationIds.map(rId => <RelationCard key={rId} id={rId} parentId={id} />)}
+                {relationIds.map(rId => <RelationCard key={rId} id={rId} ruleId={id} />)}
             </Card.Content>
 
             {/* Implications. */}
@@ -148,12 +114,12 @@ export const RuleCard = ({ id }: IdProps) => {
                     <ImplicationForm
                         key={iId}
                         id={iId}
-                        parentId={id}
+                        ruleId={id}
                     />
                 )}
                 <AddImplicationForm
                     key={implicationIds.length}
-                    parentId={id}
+                    ruleId={id}
                 />
             </Card.Content>
 

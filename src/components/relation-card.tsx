@@ -5,56 +5,56 @@ import { map } from "rxjs";
 
 import { owlFile } from "../models/owl-file";
 
-import { useObservable } from "../utils/use-unwrap";
-import { IdProps, ParentProps } from "../utils/generic-props";
+import { Input } from "./input";
+import { SearchAddDropdown } from "./search-add-dropdown";
+
+import { useObservable } from "../utils/use-observable";
 import { listAsOptions } from "../utils/list";
+import { ID } from "../utils/id";
 
-export const RelationCard = ({ id, parentId }: IdProps & ParentProps) => {
-    const { name, variables } = useObservable(owlFile.relations.byId(id));
-    const options = useObservable(owlFile.relationFunctions.values().pipe(map(listAsOptions)));
+export const RelationCard = ({ id, ruleId }: { id: ID<"Relation">, ruleId: ID<"Rule"> }) => {
+    const { name, args } = useObservable(owlFile.relations.byId(id));
+    const options = useObservable(owlFile.relationFunctions.keys().pipe(map(listAsOptions)));
 
-    const addRelation = (value: string) => owlFile.relationFunctions.add(value);
-    const setRelation = (value: string) => owlFile.relations.setField(id, "name", value);
-    const addVariable = (value: string) => owlFile.relations.alterField(id, "variables", R.append(value));
-    const setVariable = (index: number, value: string) => owlFile.relations.alterField(id, "variables", R.update(index, value));
-    const removeIfEmptyLast = (index: number, value: string) => {
-        if (R.isEmpty(value)) {
-            owlFile.relations.alterField(id, "variables", R.remove(index, 1));
+    const addRelationFunction = (value: string) => owlFile.relationFunctions.add(value);
+    const setRelationFunction = (value: string) => owlFile.relations.setField(id, "name", value);
+    const addVariable = (value: string) => owlFile.relations.alterField(id, "args", R.append(value));
+    const setVariable = (index: number) => (value: string) => owlFile.relations.alterField(id, "args", R.update(index, value));
+    const removeIfEmptyLast = (index: number) => (value: string) => {
+        if (value === "") {
+            owlFile.relations.alterField(id, "args", R.remove(index, 1));
         }
     };
-    const removeRelation = () => owlFile.removeRelation(id, parentId);
+    const removeRelation = () => owlFile.removeRelation(id, ruleId);
     return (
         <Card style={{ width: "100%" }}>
             <Card.Content>
                 <Form size="small">
-                    <Form.Dropdown
-                        placeholder="Relation..."
-                        width={5}
+                    <SearchAddDropdown
                         fluid
-                        search
-                        selection
-                        allowAdditions
+                        width={5}
+                        placeholder="Relation..."
                         options={options}
                         value={name}
-                        onAddItem={(_, data) => addRelation(data.value as string)}
-                        onChange={(_, data) => setRelation(data.value as string)}
+                        onAddItem={addRelationFunction}
+                        onChange={setRelationFunction}
                     />
                     <Form.Group widths="equal" style={{ margin: "0" }}>
-                        {variables.map((variable, index) => (
-                            <Form.Input
-                                placeholder="Variable..."
-                                fluid
+                        {args.map((variable, index) => (
+                            <Input
                                 key={index}
+                                fluid
+                                placeholder="Variable..."
                                 value={variable}
-                                onChange={event => setVariable(index, event.target.value as string)}
-                                onBlur={event => removeIfEmptyLast(index, event.target.value as string)}
+                                onChange={setVariable(index)}
+                                onBlur={removeIfEmptyLast(index)}
                             />
                         ))}
-                        <Form.Input
-                            placeholder="More..."
+                        <Input
+                            key={args.length}
                             fluid
-                            key={variables.length}
-                            onBlur={event => addVariable(event.target.value as string)}
+                            placeholder="More..."
+                            onBlur={addVariable}
                         />
                     </Form.Group>
                 </Form>

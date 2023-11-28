@@ -1,55 +1,72 @@
 import * as React from "react";
 import { Accordion, Button, Card, DropdownItemProps, Form, Icon } from "semantic-ui-react";
 import * as R from "ramda";
-import { map, filter } from "rxjs";
+import { map } from "rxjs";
 
-import { Condition, owlFile } from "../models/owl-file";
+import { owlFile } from "../models/owl-file";
 
-import { IdProps, ParentProps } from "../utils/generic-props";
-import { useObservable, useObservableWithDefault } from "../utils/use-unwrap";
+import { useObservable, useObservableWithDefault } from "../utils/use-observable";
 import { listAsOptions } from "../utils/list";
+import { ID } from "../utils/id";
+import { Condition } from "../models/interfaces";
+import { SearchAddDropdown } from "./search-add-dropdown";
+import { Input } from "./input";
 
 function disableOption(option: string, options: DropdownItemProps[]): DropdownItemProps[] {
     return options.map(R.when(x => x.value === option, x => ({ ...x, disabled: true })));
 }
 
-type ConditionFormProps = IdProps & ParentProps & { showLabels: boolean };
-const ConditionForm = ({ id, parentId, showLabels }: ConditionFormProps) => {
+type BuiltinDropdownProps = {
+    showLabels?: boolean,
+    disableExactly?: boolean,
+    value?: string
+    onChange: (value: string) => void,
+};
+const BuiltinDropdown = ({ showLabels, disableExactly, value, onChange }: BuiltinDropdownProps) => {
+    const options = useObservable(owlFile.builtins.keys().pipe(map(listAsOptions)));
+    const filteredOptions = disableExactly ? disableOption("exactly", options) : options;
+    const addBuiltin = (value: string) => owlFile.builtins.add(value);
+    return (
+        <SearchAddDropdown
+            fluid
+            width={5}
+            label={showLabels && "Builtin"}
+            placeholder="Builtin..."
+            options={filteredOptions}
+            value={value ?? ""}
+            onAddItem={addBuiltin}
+            onChange={onChange}
+        />
+    );
+};
+
+type ConditionFormProps = { id: ID<"Condition">, datavalueId: ID<"Datavalue">, showLabels: boolean };
+const ConditionForm = ({ id, datavalueId, showLabels }: ConditionFormProps) => {
     const { builtin, value } = useObservable(owlFile.conditions.byId(id));
-    const disableExactly = useObservable(owlFile.datavalues.byId(parentId).pipe(
-        filter(x => x !== undefined),
+    const disableExactly = useObservable(owlFile.datavalues.byId(datavalueId).pipe(
         map(datavalue => datavalue.conditionIds.length > 1),
     ));
-    const options = useObservable(owlFile.builtins.values().pipe(map(listAsOptions)));
-    const filteredOptions = disableExactly ? disableOption("exactly", options) : options;
 
-    const addBuiltin = (value: string) => owlFile.builtins.add(value);
     const setBuiltin = (value: string) => owlFile.conditions.setField(id, "builtin", value);
     const setValue = (value: string) => owlFile.conditions.setField(id, "value", value)
-    const removeCondition = () => owlFile.removeCondition(id, parentId);
+    const removeCondition = () => owlFile.removeCondition(id, datavalueId);
+
     return (
         <Form size="tiny">
             <Form.Group>
-                <Form.Dropdown
-                    label={showLabels && "Builtin"}
-                    placeholder="Builtin..."
-                    width={5}
-                    fluid
-                    search
-                    selection
-                    allowAdditions
-                    options={filteredOptions}
+                <BuiltinDropdown
+                    showLabels={showLabels}
+                    disableExactly={disableExactly}
                     value={builtin}
-                    onAddItem={(_, data) => addBuiltin(data.value as string)}
-                    onChange={(_, data) => setBuiltin(data.value as string)}
+                    onChange={setBuiltin}
                 />
-                <Form.Input
-                    label={showLabels && "Value"}
-                    placeholder='Value...'
+                <Input
                     fluid
                     width={3}
+                    label={showLabels && "Value"}
+                    placeholder='Value...'
                     value={value}
-                    onChange={event => setValue(event.target.value)}
+                    onChange={setValue}
                 />
                 <Form.Button
                     label={showLabels && "Remove"}
@@ -63,61 +80,48 @@ const ConditionForm = ({ id, parentId, showLabels }: ConditionFormProps) => {
     );
 };
 
-type AddConditionFormProps = ParentProps & { showLabels: boolean };
-const AddConditionForm = ({ parentId, showLabels }: AddConditionFormProps) => {
-    const options = useObservable(owlFile.builtins.values().pipe(map(listAsOptions)));
-
-    const addBuiltin = (value: string) => owlFile.builtins.add(value);
-    const isSome = (thing: any) => R.isNotNil(thing) && !R.isEmpty(thing);
-    const addCondition = (builtin: string | undefined, value: string | undefined) => {
-        if (isSome(builtin) || isSome(value)) {
-            const newId = owlFile.conditions.add({ builtin, value });
-            owlFile.datavalues.alterField(parentId, "conditionIds", R.append(newId));
+type AddConditionFormProps = { datavalueId: ID<"Datavalue">, showLabels: boolean };
+const AddConditionForm = ({ datavalueId, showLabels }: AddConditionFormProps) => {
+    const addCondition = (builtin: string, value: string) => {
+        if (builtin !== "" || value !== "") {
+            owlFile.addCondition(datavalueId, { builtin, value })
         }
     };
     return (
         <Form size="tiny">
             <Form.Group>
-                <Form.Dropdown
-                    label={showLabels && "Builtin"}
-                    placeholder="Builtin..."
-                    width={5}
-                    fluid
-                    search
-                    selection
-                    allowAdditions
-                    options={options}
-                    onAddItem={(_, data) => addBuiltin(data.value as string)}
-                    onChange={(_, data) => addCondition(data.value as string, undefined)}
+                <BuiltinDropdown
+                    showLabels={showLabels}
+                    onChange={(value) => addCondition(value, "")}
                 />
-                <Form.Input
-                    label={showLabels && "Value"}
-                    placeholder='Value...'
+                <Input
                     fluid
                     width={3}
-                    onBlur={event => addCondition(undefined, event.target.value)}
+                    label={showLabels && "Value"}
+                    placeholder='Value...'
+                    onBlur={(value) => addCondition("", value)}
                 />
             </Form.Group>
         </Form>
     );
 };
 
-const DatavalueAccordionItem = ({ id, parentId }: IdProps & ParentProps) => {
+const DatavalueAccordionItem = ({ id, objektId }: { id: ID<"Datavalue">, objektId: ID<"Objekt"> }) => {
     const { field, instance, conditionIds } = useObservable(owlFile.datavalues.byId(id));
-    const conditions = useObservableWithDefault(owlFile.datavalueConditions(id), () => []);
+    const conditions = useObservable(owlFile.datavalueConditions(id));
     const isExactly = conditions.length === 1 && conditions[0].builtin === "exactly";
-    const options = useObservableWithDefault(owlFile.datavalueOptions(parentId).pipe(map(listAsOptions)), () => []);
+    const options = useObservable(owlFile.datavalueOptions(objektId).pipe(map(listAsOptions)));
 
-    const accordionActive = useObservableWithDefault(owlFile.datavaluesExpanded.byId(id), () => false);
+    const accordionActive = useObservableWithDefault(owlFile.datavaluesExpanded.byId(id), false);
     const variablePart = `${field ?? "***"}(${instance ?? "***"})`;
     const stringifyCondition = (condition: Condition) => `${condition.builtin ?? "***"}(${condition.value})`;
     const conditionPart = R.join(" && ", conditions.map(stringifyCondition));
     let accordionTitle = `${variablePart} ${!R.isEmpty(conditions) ? "| " + conditionPart : ""}`;
 
-    const addField = (value: string) => owlFile.addDatavalueOption(parentId, value);
+    const addField = (value: string) => owlFile.addDatavalueOption(objektId, value);
     const setField = (value: string) => owlFile.datavalues.setField(id, "field", value);
     const setInstance = (value: string) => owlFile.datavalues.setField(id, "instance", value);
-    const removeDatavalue = () => owlFile.removeDatavalue(id, parentId);
+    const removeDatavalue = () => owlFile.removeDatavalue(id, objektId);
     const toggleAccordion = () => owlFile.datavaluesExpanded.alter(id, prev => !prev);
 
     return (
@@ -132,28 +136,25 @@ const DatavalueAccordionItem = ({ id, parentId }: IdProps & ParentProps) => {
             <Accordion.Content active={accordionActive}>
                 <Form size="small">
                     <Form.Group>
-                        <Form.Dropdown
+                        <SearchAddDropdown
+                            fluid
+                            width={5}
                             label="Datavalue"
                             placeholder="Datavalue..."
-                            fluid
-                            search
-                            selection
-                            allowAdditions
                             options={options}
-                            width={5}
                             value={field}
-                            onAddItem={(_, data) => addField(data.value as string)}
-                            onChange={(_, data) => setField(data.value as string)}
+                            onAddItem={addField}
+                            onChange={setField}
                         />
-                        <Form.Input
-                            label="Variable"
-                            placeholder="Variable name..."
-                            iconPosition='left'
-                            icon="edit"
+                        <Input
                             fluid
                             width={3}
+                            label="Variable"
+                            iconPosition='left'
+                            icon="edit"
+                            placeholder="Variable name..."
                             value={instance}
-                            onChange={(_, data) => setInstance(data.value as string)}
+                            onChange={setInstance}
                             disabled={isExactly}
                         />
                         <Form.Button label="Remove" icon='x' color="red" onClick={removeDatavalue} />
@@ -163,34 +164,29 @@ const DatavalueAccordionItem = ({ id, parentId }: IdProps & ParentProps) => {
                     <ConditionForm
                         key={cId}
                         id={cId}
-                        parentId={id}
+                        datavalueId={id}
                         showLabels={index === 0}
                     />
                 )}
                 {!isExactly &&
                     <AddConditionForm
                         key={conditionIds.length}
-                        parentId={id}
+                        datavalueId={id}
                         showLabels={R.isEmpty(conditionIds)}
                     />
                 }
-
             </Accordion.Content >
         </>
     );
 };
 
-export const ObjektCard = ({ id, parentId }: IdProps & ParentProps) => {
+export const ObjektCard = ({ id, ruleId }: { id: ID<"Objekt">, ruleId: ID<"Rule"> }) => {
     const { name, klass, datavalueIds } = useObservable(owlFile.objekts.byId(id));
-    const options = useObservable(owlFile.klasses.pipe(map(Object.keys), map(listAsOptions)));
+    const options = useObservable(owlFile.klasses.keys().pipe(map(listAsOptions)));
     const setName = (value: string) => owlFile.objekts.setField(id, "name", value);
     const setKlass = (value: string) => owlFile.objekts.setField(id, "klass", value);
-    const addDatavalue = () => {
-        const newId = owlFile.datavalues.add({ field: undefined, instance: "", conditionIds: [] });
-        owlFile.datavaluesExpanded.set(newId, true);
-        owlFile.objekts.alterField(id, "datavalueIds", R.append(newId));
-    }
-    const removeObjekt = () => owlFile.removeObjekt(id, parentId);
+    const addDatavalue = () => owlFile.addDatavalue(id);
+    const removeObjekt = () => owlFile.removeObjekt(id, ruleId);
     const setObjektHover = () => owlFile.hoveredObjekt.next(id);
     return (
         <Card
@@ -203,20 +199,21 @@ export const ObjektCard = ({ id, parentId }: IdProps & ParentProps) => {
                 <Form size="large">
                     <Form.Group style={{ margin: "0" }}>
                         <Form.Dropdown
-                            placeholder="Class..."
                             fluid
+                            width={5}
+                            placeholder="Class..."
                             search
                             selection
                             options={options}
-                            width={5}
                             value={klass}
                             onChange={(_, data) => setKlass(data.value as string)}
                         />
-                        <Form.Input
-                            placeholder="Variable..."
+                        <Input
+                            fluid
                             width={5}
+                            placeholder="Variable..."
                             value={name}
-                            onChange={event => setName(event.target.value as string)}
+                            onChange={setName}
                         />
                     </Form.Group>
                 </Form>
@@ -225,7 +222,7 @@ export const ObjektCard = ({ id, parentId }: IdProps & ParentProps) => {
             <Card.Content>
                 {/* Objekt datavalues. */}
                 <Accordion>
-                    {datavalueIds.map(dId => <DatavalueAccordionItem key={dId} id={dId} parentId={id} />)}
+                    {datavalueIds.map(dId => <DatavalueAccordionItem key={dId} id={dId} objektId={id} />)}
                 </Accordion>
             </Card.Content>
 

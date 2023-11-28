@@ -3,7 +3,7 @@ import { Button, Form, Modal } from "semantic-ui-react";
 import * as TypedAssert from "typed-assert";
 
 import { owlFile } from "../models/owl-file";
-import { useObservable } from "../utils/use-unwrap";
+import { useObservable } from "../utils/use-observable";
 
 async function saveFileElectron() {
     const path = owlFile.path.getValue();

@@ -1,10 +1,14 @@
-import { BehaviorSubject, Observable, combineLatestWith, filter, map } from "rxjs";
+import { BehaviorSubject, Observable, combineLatestWith, map } from "rxjs";
+import * as R from "ramda";
+
 import { Klass, Property, klassFromDeserialized } from "./klass";
 import { Clause, Rule, ruleFromDeserialized } from "./rule";
-import * as R from "ramda";
-import { filterUndefined } from "../utils/operators";
-import { Map, Table, Set } from "../utils/observable-tables";
 import { Condition, Datavalue, EnhancedRule, Implication, Objekt, Relation } from "./interfaces";
+
+import { distinctUntilChanged, prop } from "../utils/operators";
+import { RxMap, RxTable, RxSet } from "../utils/observable-tables";
+import { ID } from "../utils/id";
+import { runPython } from "../utils/python";
 
 function expectVariable(v: string) {
   if (v?.[0] !== "?") {
@@ -13,101 +17,104 @@ function expectVariable(v: string) {
 }
 
 export class OwlFile {
+  // The loaded file path.
   path: BehaviorSubject<string | undefined>;
-  file_content: ArrayBuffer | undefined;
+
+  // The content of the loaded file (not reactive).
+  fileContent: ArrayBuffer | undefined;
+
+  // The IRI of the loaded file (not reactive).
   baseIri: string | undefined;
 
   // These are constant, just deserialized to give a better overview of the rule composition.
-  klasses: Map<string, Klass>;
+  klasses: RxMap<string, Klass>;
 
-  builtins: Set<string>;
-  relationFunctions: Set<string>;
+  // Set of builtin comparison functions, collected from loaded file.
+  builtins: RxSet<string>;
+
+  // Set of known relation functions, collected from loaded file.
+  relationFunctions: RxSet<string>;
 
   // A rule is composed of objekts (and their datavalues) and relations between objects.
-  rules: Table<string, EnhancedRule>;
+  rules: RxTable<ID<"Rule">, EnhancedRule>;
 
   // Instances of classes.
-  objekts: Table<string, Objekt>;
+  objekts: RxTable<ID<"Objekt">, Objekt>;
 
   // Members of instances.
-  datavalues: Table<string, Datavalue>;
-  datavaluesExpanded: Map<string, boolean>;
+  datavalues: RxTable<ID<"Datavalue">, Datavalue>;
 
-  // Conditions of members.
-  conditions: Table<string, Condition>;
+  // A map holding which datavalue details accordion is expanded.
+  datavaluesExpanded: RxMap<ID<"Datavalue">, boolean>;
+
+  // Conditions on datavalues.
+  conditions: RxTable<ID<"Condition">, Condition>;
 
   // Inter-object relations.
-  relations: Table<string, Relation>;
+  relations: RxTable<ID<"Relation">, Relation>;
 
-  implications: Table<string, Implication>;
+  // Statements that follow from the truthiness of the the rule body.
+  implications: RxTable<ID<"Implication">, Implication>;
 
-  hoveredObjekt: BehaviorSubject<string | undefined>;
+  // Id of the currently hovered objekt.
+  hoveredObjekt: BehaviorSubject<ID<"Objekt"> | undefined>;
 
   constructor() {
-    this.path = new BehaviorSubject(undefined as string | undefined);
-    this.file_content = undefined;
+    this.path = new BehaviorSubject(undefined) as typeof this.path;
+    this.fileContent = undefined;
     this.baseIri = undefined;
 
-    this.klasses = new Map();
-    this.builtins = new Set();
-    this.relationFunctions = new Set();
-    this.rules = new Table();
-    this.objekts = new Table();
-    this.datavalues = new Table();
-    this.datavaluesExpanded = new Map();
-    this.conditions = new Table();
-    this.relations = new Table();
-    this.implications = new Table();
+    this.klasses = new RxMap();
+    this.builtins = new RxSet();
+    this.relationFunctions = new RxSet();
 
-    this.hoveredObjekt = new BehaviorSubject(undefined as string | undefined);
+    this.rules = new RxTable();
+    this.objekts = new RxTable();
+    this.datavalues = new RxTable();
+    this.datavaluesExpanded = new RxMap();
+    this.conditions = new RxTable();
+    this.relations = new RxTable();
+    this.implications = new RxTable();
+
+    this.hoveredObjekt = new BehaviorSubject(undefined) as typeof this.hoveredObjekt;
 
     // TODO remove this.
     // this.path.next("lol.rofl");
     // this.importData(klasses, rules);
   }
 
+  // Emits the currently hovered klass name or undefined if no class is hovered.
   hoveredKlass(): Observable<string | undefined> {
     return this.hoveredObjekt.pipe(
-      combineLatestWith(this.objekts.entities),
+      combineLatestWith(this.objekts.entries),
       map(([id, objekts]) => id && objekts[id]?.klass),
-      distinct()
+      distinctUntilChanged()
     );
   }
 
-  datavalueConditions(datavalueId: string): Observable<Condition[]> {
-    const { datavalues, conditions } = this;
-    return datavalues.byId(datavalueId).pipe(
-      filterUndefined(),
-      map(x => x.conditionIds),
-      combineLatestWith(conditions.entities),
-      map(([ids, conditions]) => ids.map(id => conditions[id]))
+  datavalueConditions(datavalueId: ID<"Datavalue">): Observable<Condition[]> {
+    return this.datavalues.byId(datavalueId).pipe(
+      prop("conditionIds"),
+      combineLatestWith(this.conditions.entries),
+      map(([ids, conditions]) => ids.map(id => conditions[id]!))
     );
   }
 
-  datavalueOptions(objektId: string): Observable<string[]> {
+  datavalueOptions(objektId: ID<"Objekt">): Observable<string[]> {
     return this.objekts.byId(objektId).pipe(
-      map(x => x?.klass),
-      combineLatestWith(this.klasses),
-      filter(([a, b]) => a !== undefined && b !== undefined),
-      map(
-        ([klassName, klasses]) => R.pipe(
-          R.path([klassName as string, "datatypeProperties"]) as (x: typeof klasses) => Property[],
-          R.pluck("name"),
-        )(klasses) as string[] | undefined
-      ),
-      filterUndefined(),
+      prop("klass"),
+      combineLatestWith(this.klasses.entries),
+      map(([klassName, klasses]) => {
+        // Why does TS fail to deduce the type of `properties`?
+        const properties = R.path([klassName, "datatypeProperties"], klasses) as Property[] | undefined;
+        return properties !== undefined ? R.pluck("name", properties) : [];
+      }),
     ) as Observable<string[]>;
   }
 
-  addDatavalueOption(objektId: string, name: string) {
-    const objekt = this.objekts.get(objektId);
-    const klassName = objekt.klass;
-    if (klassName === undefined) {
-      throw "RIP klassName undefined";
-    }
-    const oldKlasses = this.klasses.getValue();
-    const oldKlass = oldKlasses[klassName];
-    const newKlass = {
+  addDatavalueOption(objektId: ID<"Objekt">, name: string) {
+    const { klass } = this.objekts.get(objektId)!;
+    this.klasses.alter(klass, oldKlass => oldKlass && {
       ...oldKlass,
       datatypeProperties: [
         ...oldKlass.datatypeProperties,
@@ -116,60 +123,82 @@ export class OwlFile {
           type: { type: "primitive", value: "any" }
         }
       ]
-    };
-    this.klasses.next({ ...oldKlasses, [klassName]: newKlass });
+    });
   }
 
-  removeCondition(conditionId: string, parentId: string | undefined = undefined) {
-    if (parentId !== undefined) {
-      this.datavalues.alterField(parentId, "conditionIds", R.without([conditionId]));
-    }
+  addRule() {
+    this.rules.add({
+      label: "",
+      enabled: true,
+      objektIds: [],
+      relationIds: [],
+      implicationIds: [],
+    });
+  }
 
+  addObjekt(ruleId: ID<"Rule">) {
+    const objekt = { name: "", klass: "", datavalueIds: [] };
+    const newId = this.objekts.add(objekt);
+    this.rules.alterField(ruleId, "objektIds", R.append(newId));
+  }
+
+  addDatavalue(objektId: ID<"Objekt">) {
+    const datavalue = { field: "", instance: "", conditionIds: [] };
+    const newId = owlFile.datavalues.add(datavalue);
+    owlFile.datavaluesExpanded.set(newId, true);
+    owlFile.objekts.alterField(objektId, "datavalueIds", R.append(newId));
+  }
+
+  addCondition(datavalueId: ID<"Datavalue">, value?: Condition) {
+    const condition = value ?? { builtin: "", value: "" };
+    const newId = owlFile.conditions.add(condition);
+    owlFile.datavalues.alterField(datavalueId, "conditionIds", R.append(newId));
+  }
+
+  addRelation(ruleId: ID<"Rule">) {
+    const relation = { name: "", args: [] };
+    const newId = this.relations.add(relation);
+    this.rules.alterField(ruleId, "relationIds", R.append(newId));
+  }
+
+  addImplication(ruleId: ID<"Rule">, value?: Implication) {
+    const implication = value ?? { name: "", args: [] };
+    const newId = owlFile.implications.add(implication);
+    owlFile.rules.alterField(ruleId, "implicationIds", R.append(newId));
+  }
+
+  removeCondition(conditionId: ID<"Condition">, parentId?: ID<"Datavalue">) {
+    parentId && this.datavalues.alterField(parentId, "conditionIds", R.without([conditionId]));
     this.conditions.remove(conditionId);
   }
 
-  removeDatavalue(datavalueId: string, parentId: string | undefined = undefined) {
-    if (parentId !== undefined) {
-      this.objekts.alterField(parentId, "datavalueIds", R.without([datavalueId]));
-    }
-
-    const datavalue = this.datavalues.get(datavalueId);
-    datavalue.conditionIds.forEach(id => this.removeCondition(id));
+  removeDatavalue(datavalueId: ID<"Datavalue">, parentId?: ID<"Objekt">) {
+    parentId && this.objekts.alterField(parentId, "datavalueIds", R.without([datavalueId]));
+    this.datavalues.get(datavalueId)?.conditionIds.forEach(id => this.removeCondition(id));
     this.datavalues.remove(datavalueId);
   }
 
-  removeObjekt(objektId: string, parentId: string | undefined = undefined) {
-    if (parentId !== undefined) {
-      this.rules.alterField(parentId, "objektIds", R.without([objektId]));
-    }
-
-    const objekt = this.objekts.get(objektId);
-    objekt.datavalueIds.forEach(id => this.removeDatavalue(id));
+  removeObjekt(objektId: ID<"Objekt">, parentId?: ID<"Rule">) {
+    parentId && this.rules.alterField(parentId, "objektIds", R.without([objektId]));
+    this.objekts.get(objektId)?.datavalueIds.forEach(id => this.removeDatavalue(id));
     this.objekts.remove(objektId);
   }
 
-  removeRelation(relationId: string, parentId: string | undefined = undefined) {
-    if (parentId !== undefined) {
-      this.rules.alterField(parentId, "relationIds", R.without([relationId]));
-    }
-
+  removeRelation(relationId: ID<"Relation">, parentId?: ID<"Rule">) {
+    parentId && this.rules.alterField(parentId, "relationIds", R.without([relationId]));
     this.relations.remove(relationId);
   }
 
-  removeImplication(implicationId: string, parentId: string | undefined = undefined) {
-    console.log(implicationId, parentId);
-    if (parentId !== undefined) {
-      this.rules.alterField(parentId, "implicationIds", R.without([implicationId]));
-    }
-
+  removeImplication(implicationId: ID<"Implication">, parentId?: ID<"Rule">) {
+    parentId && this.rules.alterField(parentId, "implicationIds", R.without([implicationId]));
     this.implications.remove(implicationId);
   }
 
-  removeRule(ruleId: string) {
+  removeRule(ruleId: ID<"Rule">) {
     const rule = this.rules.get(ruleId);
-    rule.objektIds.forEach(id => this.removeObjekt(id));
-    rule.relationIds.forEach(id => this.removeRelation(id));
-    rule.implicationIds.forEach(id => this.removeImplication(id));
+    rule?.objektIds.forEach(id => this.removeObjekt(id));
+    rule?.relationIds.forEach(id => this.removeRelation(id));
+    rule?.implicationIds.forEach(id => this.removeImplication(id));
     this.rules.remove(ruleId);
   }
 
@@ -188,7 +217,7 @@ export class OwlFile {
     this.hoveredObjekt.next(undefined);
   }
 
-  importConditionsForInstance(instance: string, builtinClauses: Clause[]): string[] {
+  importConditionsForInstance(instance: string, builtinClauses: Clause[]): ID<"Condition">[] {
     return builtinClauses
       .filter(clause => clause.args[0] === instance)
       .map(clause => {
@@ -202,7 +231,7 @@ export class OwlFile {
 
   // The datavalue clause attaches the property `name` to the object `args[0]` using the variable `args[1]`.
   // It can also set a value directly, when `args[1]` is not a variable but a value.
-  importDatavalue(datavalueClause: Clause, builtinClauses: Clause[]): string {
+  importDatavalue(datavalueClause: Clause, builtinClauses: Clause[]): ID<"Datavalue"> {
     if (datavalueClause.args.length !== 2) {
       throw `Unexpected datavalue clause: ${datavalueClause}`;
     }
@@ -221,19 +250,13 @@ export class OwlFile {
       this.builtins.add("exactly");
       return this.datavalues.add({
         field: datavalueClause.name,
-        instance: undefined,
+        instance: "",
         conditionIds: [this.conditions.add({ builtin: "exactly", value: varOrValue?.toString() })]
       });
     }
   }
 
-  importDatavaluesForObjekt(name: string, datavalueClauses: Clause[], builtinClauses: Clause[]): string[] {
-    return datavalueClauses
-      .filter(clause => clause.args[0] === name)
-      .map(datavalueClause => this.importDatavalue(datavalueClause, builtinClauses));
-  }
-
-  importObjekt(objektClause: Clause, datavalueClauses: Clause[], builtinClauses: Clause[]): string {
+  importObjekt(objektClause: Clause, datavalueClauses: Clause[], builtinClauses: Clause[]): ID<"Objekt"> {
     const { name: klass, args } = objektClause;
     if (args.length !== 1) {
       throw `Unexpected multivariable class clause: ${objektClause}`;
@@ -241,17 +264,19 @@ export class OwlFile {
 
     const name = args[0];
     expectVariable(name);
-    const datavalueIds = this.importDatavaluesForObjekt(name, datavalueClauses, builtinClauses);
+    const datavalueIds = datavalueClauses
+      .filter(clause => clause.args[0] === name)
+      .map(clause => this.importDatavalue(clause, builtinClauses));
     return this.objekts.add({ name, klass, datavalueIds });
   }
 
-  importRelation(clause: Clause): string {
+  importRelation(clause: Clause): ID<"Relation"> {
     const { name, args } = clause;
     this.relationFunctions.add(name);
-    return this.relations.add({ name, variables: args });
+    return this.relations.add({ name, args: args });
   }
 
-  importImplication(clause: Clause): string {
+  importImplication(clause: Clause): ID<"Implication"> {
     const { name, args } = clause;
     return this.implications.add({ name, args });
   }
@@ -267,57 +292,42 @@ export class OwlFile {
     this.rules.add({ label: rule.label, enabled: rule.enabled, objektIds, relationIds, implicationIds });
   }
 
-  importData(klasses: Klass[], rules: Rule[]) {
-    this.klasses.next(Object.fromEntries(klasses.map(klass => [klass.name, klass])));
-    rules.forEach(this.importRule.bind(this));
-  }
-
   /**
     * Select a file path and get its contents.
     */
   async importFromSerialized(path: string, content: ArrayBuffer) {
-    // TODO Clear all previous data.
-    this.path.next(path);
-    this.file_content = content;
-
     this.clear();
 
+    this.path.next(path);
+    this.fileContent = content;
 
-    // Convert data to python.
-    const pyodide = window.pyscript.interpreter.interpreter;
-    const locals = pyodide.toPy({ path, view: content });
-
-    const analyzedData = pyodide.runPython("load_owl(path, view)", { locals }).toJs();
-    const klasses = analyzedData.get("classes").map(klassFromDeserialized);
-    const rules = analyzedData.get("rules").map(ruleFromDeserialized);
-
+    const analyzedData = runPython("load_owl(path, view)", { path, view: content });
     this.baseIri = analyzedData.get("base_iri");
-    this.importData(klasses, rules);
+    (analyzedData.get("classes") as Map<string, any>[]).map(klassFromDeserialized).forEach(klass => this.klasses.set(klass.name, klass));
+    (analyzedData.get("rules") as Map<string, any>[]).map(ruleFromDeserialized).forEach(rule => this.importRule(rule));
   }
 
-  serializeCondition(instance: string, conditionId: string): Clause[] {
-    const { builtin, value } = this.conditions.get(conditionId);
-    return [
-      { type: "builtin", name: builtin, args: [instance, value] },
-    ];
+  serializeCondition(instance: string, conditionId: ID<"Condition">): Clause {
+    const { builtin, value } = this.conditions.get(conditionId)!;
+    return { type: "builtin", name: builtin, args: [instance, value] };
   }
 
-  serializeDatavalue(name: string, datavalueId: string): Clause[] {
-    const { field, instance, conditionIds } = this.datavalues.get(datavalueId);
+  serializeDatavalue(name: string, datavalueId: ID<"Datavalue">): Clause[] {
+    const { field, instance, conditionIds } = this.datavalues.get(datavalueId)!;
     if (conditionIds.length === 1) {
-      const { builtin, value } = this.conditions.get(conditionIds[0]);
+      const { builtin, value } = this.conditions.get(conditionIds[0])!;
       if (builtin === "exactly") {
         return [{ type: "datavalue", name: field, args: [name, value] }];
       }
     }
     return [
       { type: "datavalue", name: field, args: [name, instance] },
-      ...conditionIds.flatMap(id => this.serializeCondition(instance, id)),
+      ...conditionIds.map(id => this.serializeCondition(instance, id)),
     ];
   }
 
-  serializeObjekt(objektId: string): Clause[] {
-    const { name, klass, datavalueIds } = this.objekts.get(objektId);
+  serializeObjekt(objektId: ID<"Objekt">): Clause[] {
+    const { name, klass, datavalueIds } = this.objekts.get(objektId)!;
 
     return [
       { type: "class", name: klass, args: [name] },
@@ -325,30 +335,31 @@ export class OwlFile {
     ];
   }
 
-  serializeRelation(relationId: string): Clause[] {
-    const { name, variables } = this.relations.get(relationId);
-    return [{ type: "property", name, args: variables }];
+  serializeRelation(relationId: ID<"Relation">): Clause {
+    const { name, args } = this.relations.get(relationId)!;
+    return { type: "property", name, args };
   }
 
-  serializeImplication(implicationId: string): Clause[] {
-    const { name, args } = this.implications.get(implicationId);
-    return [{ type: "unknown", name, args }];
+  serializeImplication(implicationId: ID<"Implication">): Clause {
+    const { name, args } = this.implications.get(implicationId)!;
+    return { type: "datavalue", name, args }; // Is this actually a datavalue?
   }
 
   serialize(): Uint8Array {
-    const rules = Object.values(this.rules.entities.getValue()).map(rule => ({
-        label: rule.label,
-        enabled: rule.enabled,
-        body: [
-          ...rule.objektIds.flatMap(this.serializeObjekt.bind(this)),
-          ...rule.relationIds.flatMap(this.serializeRelation.bind(this)),
-        ],
-        head: rule.implicationIds.flatMap(this.serializeImplication.bind(this)),
+    const rules = this.rules.getValues().map(rule => ({
+      label: rule.label,
+      enabled: rule.enabled,
+      body: [
+        ...rule.objektIds.flatMap(this.serializeObjekt.bind(this)),
+        ...rule.relationIds.map(this.serializeRelation.bind(this)),
+      ],
+      head: rule.implicationIds.map(this.serializeImplication.bind(this)),
     }));
 
-    const pyodide = window.pyscript.interpreter.interpreter;
-    const locals = pyodide.toPy({ base_iri: this.baseIri, rules, old_data: this.file_content });
-    return pyodide.runPython("save_rules(base_iri, rules, old_data)", { locals }).toJs();
+    return runPython(
+      "save_rules(base_iri, rules, old_data)",
+      { base_iri: this.baseIri, rules, old_data: this.fileContent },
+    )
   }
 }
 

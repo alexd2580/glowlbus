@@ -8,12 +8,16 @@ import { Observable } from "rxjs";
 
 function get<T>(observable: Observable<T>): T {
   let value;
-  observable.subscribe((val) => (value = val)).unsubscribe();
+  let found = false;
+  observable.subscribe((val) => { value = val; found = true }).unsubscribe();
+  if (!found) {
+    throw "Failed to get value from observable! Use `useObservableWithDefault` instead.";
+  }
   return value as T;
 }
 
 // Custom React hook for unwrapping observables
-export function useObservableWithDefault<T>(observable: Observable<T>, defaultFactory: () => T): T {
+export function useObservableWithDefault<T>(observable: Observable<T>, defaultFactory: T | (() => T)): T {
   const [value, setValue] = useState(defaultFactory);
   useEffect(
     () => {

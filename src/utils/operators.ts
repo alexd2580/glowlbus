@@ -1,12 +1,12 @@
-import rxjs from "rxjs";
+import * as rxjs from "rxjs";
 import * as R from "ramda";
 
 export const keys = <T extends object, K extends keyof T>() =>
   rxjs.map((object: T) => Object.keys(object) as K[]);
 export const values = <T extends object, K extends keyof T>() =>
   rxjs.map((object: T) => Object.values(object) as Exclude<T[K], undefined>[]);
-export const prop = <T extends object, K extends keyof T>(id: K) =>
-  rxjs.map((object: T) => object[id]);
+export const prop = <T extends object, K extends keyof T>(key: K) =>
+  rxjs.map((object: T) => object[key]);
 export const distinctUntilChanged = <T,>() =>
   rxjs.distinctUntilChanged<T>((a, b) => R.equals(a, b));
 

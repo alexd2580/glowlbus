@@ -8,11 +8,10 @@ import { owlFile } from "./models/owl-file";
 import { LoadingOverlay } from "./components/loading-overlay";
 import { KlassCard } from "./components/klass-card";
 import { RuleCard } from "./components/rule-card";
-
-import { distinct, keys } from "./utils/operators";
-import { useObservable } from "./utils/use-unwrap";
 import { LoadFileButton } from "./components/load-file-button";
 import { SaveFileAsButton } from "./components/save-file-as-button";
+
+import { useObservable } from "./utils/use-observable";
 
 export const App = () => {
     const dialogVisible = useObservable(fileDialog.visible);
@@ -27,7 +26,7 @@ export const App = () => {
             </Menu>
             <LoadingOverlay active={dialogVisible} style={{ backgroundColor: "#A5D8DD", padding: 0, margin: 0, height: "calc(100% - 40px)" }}>
                 <Container fluid style={{ width: "90%", height: "100%", backgroundColor: "transparent" }}>
-                    {typeof path !== "undefined" ? <EditFile /> : <LoadFile />}
+                    {typeof path === "undefined" ? <LoadFile /> : <EditFile />}
                 </Container>
             </LoadingOverlay>
         </>
@@ -39,7 +38,7 @@ const LoadFile = () => {
         <Card>
             <Card.Content>
                 <Card.Header>Hello</Card.Header>
-                <Card.Description>Now we're running python and semantic ui</Card.Description>
+                <Card.Description>Now we're running python and semantic ui. TODO remove this?</Card.Description>
             </Card.Content>
             <Card.Content extra>
                 <LoadFileButton />
@@ -49,23 +48,14 @@ const LoadFile = () => {
 };
 
 const EditFile = () => {
-    const klassIds = useObservable(owlFile.klasses.pipe(keys, distinct()));
-    const ruleIds = useObservable(owlFile.rules.ids());
-
-    const addRule = () => owlFile.rules.add({
-        label: "",
-        enabled: true,
-        objektIds: [],
-        relationIds: [],
-        implicationIds: [],
-    });
-
+    const klassIds = useObservable(owlFile.klasses.keys());
+    const ruleIds = useObservable(owlFile.rules.keys());
     return (
         <Grid columns={2} style={{ margin: 0, height: "100%" }}>
             <Grid.Column style={{ height: "100%", overflow: "scroll" }} width={5}>
                 {
                     R.isEmpty(klassIds)
-                        ? <p>No classes were loaded.</p>
+                        ? <p>No classes loaded.</p>
                         : klassIds.map(id => <KlassCard key={id} id={id} />)
                 }
             </Grid.Column>
@@ -73,12 +63,12 @@ const EditFile = () => {
             <Grid.Column style={{ height: "100%", overflow: "scroll" }} width={11}>
                 {
                     R.isEmpty(ruleIds)
-                        ? <p>No classes were loaded.</p>
+                        ? <p>No rules loaded.</p>
                         : ruleIds.map(id => <RuleCard key={id} id={id} />)
                 }
                 <Form>
                     <Form.Field>
-                        <Button icon="add" color="blue" content="Add rule" onClick={addRule} />
+                        <Button icon="add" color="blue" content="Add rule" onClick={owlFile.addRule} />
                     </Form.Field>
                 </Form>
             </Grid.Column>

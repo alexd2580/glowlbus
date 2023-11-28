@@ -1,19 +1,12 @@
 import * as React from "react";
 import { Card, Table } from "semantic-ui-react";
-import { map } from "rxjs";
 
 import { owlFile } from "../models/owl-file";
 
-import { useObservable } from "../utils/use-unwrap";
-import { distinct } from "../utils/operators";
+import { useObservable } from "../utils/use-observable";
 
-export interface KlassCardProps {
-    id: string;
-}
-
-export const KlassCard = ({ id }: KlassCardProps) => {
-    const observable = owlFile.klasses.pipe(map(klasses => klasses[id]), distinct());
-    const { name, objectProperties, datatypeProperties } = useObservable(observable);
+export const KlassCard = ({ id }: { id: string }) => {
+    const { name, objectProperties, datatypeProperties } = useObservable(owlFile.klasses.byId(id));
     const highlight = name === useObservable(owlFile.hoveredKlass());
     const highlightColor = highlight ? { backgroundColor: "#CFCFCF" } : {};
     return (

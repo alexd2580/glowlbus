@@ -4,7 +4,7 @@ import * as R from "ramda";
 
 import { keys, values, distinctUntilChanged, filterUndefined, prop } from "../utils/operators";
 
-export class Map<Id extends string | number | symbol, Value> {
+export class RxMap<Key extends string | number | symbol, Value> {
   entries: BehaviorSubject<{ [key in Key]?: Value; }>;
 
   constructor() {
@@ -23,6 +23,10 @@ export class Map<Id extends string | number | symbol, Value> {
   byId(key: Key): Observable<Value> {
     // We need distinctUntilChanged so that changing other entities doesn't trigger a rerender on every entity.
     return this.entries.pipe(prop(key), filterUndefined(), distinctUntilChanged());
+  }
+
+  getValues(): Value[] {
+    return Object.values(this.entries.getValue());
   }
 
   get(key: Key): Value | undefined {
@@ -49,9 +53,9 @@ export class Map<Id extends string | number | symbol, Value> {
   clear() {
     this.entries.next({});
   }
-}
+};
 
-export class Table<Id extends string | number | symbol, Value> extends Map<Id, Value> {
+export class RxTable<Id extends string | number | symbol, Value> extends RxMap<Id, Value> {
   add(entity: Value): Id {
     let id = uuidv4() as Id; // TODO type this properly
     this.set(id, entity);
@@ -65,6 +69,10 @@ export class Table<Id extends string | number | symbol, Value> extends Map<Id, V
   setField<K extends keyof Value>(id: Id, field: K, value: Value[K]) {
     this.alter(id, (t: Value | undefined) => t && ({ ...t, [field]: value }));
   }
-}
+};
 
-export class Set<Value extends string | number | symbol> extends Map<Value, undefined> { };
+export class RxSet<Value extends string | number | symbol> extends RxMap<Value, undefined> {
+  add(entity: Value) {
+    this.set(entity, undefined);
+  }
+};
