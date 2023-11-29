@@ -84,14 +84,18 @@ export const RuleCard = ({ id }: { id: ID<"Rule"> }) => {
         <Card style={{ width: "100%", backgroundColor: "#F1F1F1", marginBottom: "30px" }}>
             {/* Generic rule data. */}
             <Card.Content>
-                <h2 style={{ color: "grey" }}>Rule: </h2>
+
                 <Form size="big">
+                    <Form.Group inline style={{ marginBottom: 0 }} >
                     <Form.Input
+                        label={<h2 style={{ color: "grey" }}>Rule: </h2>}
+                        inline
                         placeholder="Rule name..."
-                        width={6}
+                        width={12}
                         value={label}
                         onChange={event => setLabel(event.target.value)}
                     />
+                    </Form.Group>
                 </Form>
             </Card.Content>
 
