@@ -69,10 +69,12 @@ const EditFile = () => {
 
     useEffect(() => {
         const subscription = owlFile.hoveredKlass().subscribe((hovered) => {
-            hovered && (ref.current as HTMLDivElement | null)?.children[klassIndices[hovered]].scrollIntoView({ behavior: "smooth", block: "center" });
+            const hoveredIndex = hovered && klassIndices[hovered];
+            const klasses = (ref.current as HTMLDivElement | null)?.children;
+            hoveredIndex && klasses?.[hoveredIndex].scrollIntoView({ behavior: "smooth", block: "center" });
         });
         return () => subscription.unsubscribe();
-    }, [ref]);
+    }, [ref, JSON.stringify(klassIndices)]);
 
     const ruleIds = useObservable(owlFile.rules.keys());
     return (
