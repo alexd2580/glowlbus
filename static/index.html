@@ -3,11 +3,10 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Interactive application window</title>
+    <title>GlOWLbus SWRL editor</title>
 
-    <!-- Load pyscript (WASM python interpreter). -->
-    <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
-    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+    <!-- Pyscript is not needed when all you want is to run some python. -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"></script>
 
     <style>
         body, #root {
@@ -15,21 +14,10 @@
             height: 100%;
             overflow: hidden;
         }
-        py-terminal {
-            display: none;
-        }
     </style>
 </head>
 
 <body>
-    <!-- Load the python App. -->
-    <py-config id="pyconfig">
-        # sqlite3 is a non-standard dependency that needs to be specified explicitly.
-        # owlready doesn't have a wheel, so we use a third-party fork to install the wheel from.
-        packages = ["sqlite3", "static/Owlready2-0.25-py3-none-any.whl"]
-    </py-config>
-    <py-script src="static/index.py"></py-script>
-
     <!-- Here's the actual website (powered by React). -->
     <div id="root"></div>
 </body>

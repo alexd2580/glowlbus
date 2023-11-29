@@ -15,32 +15,9 @@ interface Electron {
     saveFile(path: string, data: Buffer): Promise<void>;
 }
 
-type PyValue = any;
-
-interface Scope {
-    [key: string]: PyValue;
-}
-
-interface Variables {
-    locals?: Scope;
-    flobals?: Scope;
-}
-
-interface Pyodide {
-    toPy<T>(t: T): PyValue;
-    runPython(code: string, variables: Variables): PyValue;
-}
-
-interface Pyscript {
-    interpreter: {
-        interpreter: Pyodide;
-    }
-}
-
 declare global {
     interface Window {
         electron: Electron;
-        pyscript: Pyscript;
     }
 }
 
