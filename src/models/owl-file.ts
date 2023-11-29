@@ -1,4 +1,4 @@
-import { BehaviorSubject, Observable, combineLatestWith, map } from "rxjs";
+import { BehaviorSubject, Observable, Subject, combineLatestWith, connect, debounceTime, map, merge, tap } from "rxjs";
 import * as R from "ramda";
 
 import { Klass, Property, klassFromDeserialized } from "./klass";
@@ -59,6 +59,12 @@ export class OwlFile {
   // Id of the currently hovered objekt.
   hoveredObjekt: BehaviorSubject<ID<"Objekt"> | undefined>;
 
+  // Error input stream.
+  error: Subject<string>;
+
+  // Error output stream, emits the last error message and a bool specifying whether to show this error.
+  displayError: BehaviorSubject<[string, boolean]>;
+
   constructor() {
     this.path = new BehaviorSubject(undefined) as typeof this.path;
     this.fileContent = undefined;
@@ -77,6 +83,24 @@ export class OwlFile {
     this.implications = new RxTable();
 
     this.hoveredObjekt = new BehaviorSubject(undefined) as typeof this.hoveredObjekt;
+
+    this.error = new Subject();
+    this.displayError = new BehaviorSubject(["", false]) as typeof this.displayError;
+
+    const errorWithTimeout = this.error.pipe(
+      tap(_ => console.log("error")),
+      map(e => [e, true] as [string, true]),
+      connect(shared => merge(
+        shared.pipe(map(x => x)),
+        shared.pipe(
+          debounceTime(8000),
+          tap(_ => console.log("reset")),
+          map(([x, _]) => [x, false] as [string, false])
+        )
+      )),
+      tap(_ => console.log("final", _[1])),
+    );
+    errorWithTimeout.subscribe(this.displayError);
 
     // TODO remove this.
     // this.path.next("lol.rofl");
@@ -345,7 +369,7 @@ export class OwlFile {
     return { type: "datavalue", name, args }; // Is this actually a datavalue?
   }
 
-  serialize(): Uint8Array {
+  serialize(): Uint8Array | undefined {
     const rules = this.rules.getValues().map(rule => ({
       label: rule.label,
       enabled: rule.enabled,
@@ -356,10 +380,17 @@ export class OwlFile {
       head: rule.implicationIds.map(this.serializeImplication.bind(this)),
     }));
 
-    return runPython(
+    const result = runPython(
       "save_rules(base_iri, rules, old_data)",
       { base_iri: this.baseIri, rules, old_data: this.fileContent },
-    )
+    );
+
+    if (result[0] === undefined) {
+      this.error.next(result[1]);
+      return undefined;
+    } else {
+      return result[0];
+    }
   }
 }
 

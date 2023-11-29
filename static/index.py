@@ -125,26 +125,34 @@ def build_rule_string(rule: dict) -> str:
     head_clauses = (build_clause_string(c) for c in rule["head"])
     return f"{', '.join(body_clauses)} -> {', '.join(head_clauses)}"
 
-def save_rules(base_iri: str, rules: list[dict], old_data: memoryview) -> bytes:
+def save_rules(base_iri: str, rules: list[dict], old_data: memoryview) -> tuple[Optional[bytes], Optional[str]]:
     new_file_obj = BytesIO()
 
     old_file_obj = BytesIO(old_data)
     ontology = owlready2.get_ontology(base_iri).load(fileobj=old_file_obj)
 
-    with ontology:
-        # Delete all previous rules.
-        while rule := next(ontology.rules(), None):
-            owlready2.prop.destroy_entity(rule)
+    try:
+        with ontology:
+            # Delete all previous rules.
+            while rule := next(ontology.rules(), None):
+                owlready2.prop.destroy_entity(rule)
 
-        # Create all new rules.
-        for rule in rules:
-            imp = owlready2.swrl.Imp()
+            # Create all new rules.
+            for rule in rules:
+                try:
+                    imp = owlready2.swrl.Imp()
 
-            as_string = build_rule_string(rule)
-            imp.set_as_rule(as_string)
-            imp.label = [rule["label"]]
-            imp.isRuleEnabled = rule["enabled"]
+                    as_string = build_rule_string(rule)
+                    imp.set_as_rule(as_string)
+                    imp.label = [rule["label"]]
+                    imp.isRuleEnabled = rule["enabled"]
+                except Exception as e:
+                    import traceback; traceback.print_exc()
+                    return None, f"Rule '{rule['label']}': {str(e)}"
 
-        ontology.save(file=new_file_obj)
+            ontology.save(file=new_file_obj)
 
-    return new_file_obj.getvalue()
+        return new_file_obj.getvalue(), None
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return None, str(e)

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Button, Card, CardProps, Container, Form, Grid, Menu } from "semantic-ui-react";
+import { Button, Card, CardProps, Container, Form, Grid, Menu, Message } from "semantic-ui-react";
 import * as R from "ramda";
 
 import { fileDialog } from "./models/file-dialog";
@@ -17,6 +17,16 @@ import { useEffect, useRef } from "react";
 export const App = () => {
     const dialogVisible = useObservable(fileDialog.visible);
     const path = useObservable(owlFile.path);
+    const [error, showError] = useObservable(owlFile.displayError);
+
+    const errorMessageStyle: React.CSSProperties = {
+        transition: "opacity 0.5s ease, right 0.5s ease",
+        position: "absolute",
+        top: "10px",
+        right: showError ? "10px" : "0px",
+        opacity: showError ? 1 : 0,
+    };
+
     return (
         <>
             <Menu attached='top' inverted>
@@ -28,6 +38,9 @@ export const App = () => {
             <LoadingOverlay active={dialogVisible} style={{ backgroundColor: "#A5D8DD", padding: 0, margin: 0, height: "calc(100% - 40px)" }}>
                 <Container fluid style={{ width: "90%", height: "100%", backgroundColor: "transparent" }}>
                     {typeof path === "undefined" ? <LoadFile /> : <EditFile />}
+                    <div style={errorMessageStyle}>
+                        <Message size="big" negative icon="save" header="Error" content={error} />
+                    </div>
                 </Container>
             </LoadingOverlay>
         </>

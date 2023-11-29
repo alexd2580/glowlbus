@@ -9,6 +9,9 @@ async function saveFileElectron() {
     const path = owlFile.path.getValue();
     TypedAssert.isNotUndefined(path);
     const serialized = owlFile.serialize();
+    if (serialized === undefined) {
+        return;
+    }
 
     const asBuffer = Buffer.from(serialized.buffer);
     await window.electron.saveFile(path, asBuffer);
@@ -18,6 +21,9 @@ async function saveFileHtml() {
     const path = owlFile.path.getValue();
     TypedAssert.isNotUndefined(path);
     const serialized = owlFile.serialize();
+    if (serialized === undefined) {
+        return;
+    }
 
     const asBlob = new Blob([serialized.buffer]);
     const downloadUrl = URL.createObjectURL(asBlob);
