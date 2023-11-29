@@ -19,24 +19,25 @@ interface Pyodide {
   runPython(code: string, variables: Variables): PyValue;
 }
 
-export async function setupPython() {
-  pyodide = await loadPyodide();
+export async function setupPython(): Promise<Pyodide> {
+  const pyodide = await loadPyodide();
   await pyodide.loadPackage("micropip");
   const micropip = pyodide.pyimport("micropip");
   await micropip.install("sqlite3");
   await micropip.install("static/Owlready2-0.25-py3-none-any.whl");
   const code = await (await fetch("static/index.py")).text();
   pyodide.runPython(code);
+  return pyodide;
 }
 
-export let pyodide: Pyodide | undefined = undefined;
+export let pyodideLoader: Promise<Pyodide> = setupPython();
 
 setupPython();
 
 type FunctionCallString = `${string}(${string})`;
 
-export function runPython(code: FunctionCallString, context: { [key: string]: any }): any {
-  // TODO wait for pyodide? Lazy loading? defer loading?
+export async function runPython(code: FunctionCallString, context: { [key: string]: any }): Promise<any> {
+  const pyodide = await pyodideLoader;
   const locals = pyodide?.toPy(context);
   return pyodide?.runPython(code, { locals }).toJs();
 }

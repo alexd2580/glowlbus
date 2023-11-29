@@ -8,7 +8,7 @@ import { useObservable } from "../utils/use-observable";
 async function saveFileElectron() {
     const path = owlFile.path.getValue();
     TypedAssert.isNotUndefined(path);
-    const serialized = owlFile.serialize();
+    const serialized = await owlFile.serialize();
     if (serialized === undefined) {
         return;
     }
@@ -20,7 +20,7 @@ async function saveFileElectron() {
 async function saveFileHtml() {
     const path = owlFile.path.getValue();
     TypedAssert.isNotUndefined(path);
-    const serialized = owlFile.serialize();
+    const serialized = await owlFile.serialize();
     if (serialized === undefined) {
         return;
     }

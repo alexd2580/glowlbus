@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Button, Card, CardProps, Container, Form, Grid, Menu, Message } from "semantic-ui-react";
+import { Button, Card, CardProps, Container, Form, Grid, Icon, Menu, Message } from "semantic-ui-react";
 import * as R from "ramda";
 
 import { fileDialog } from "./models/file-dialog";
@@ -31,11 +31,12 @@ export const App = () => {
         <>
             <Menu attached='top' inverted>
                 <Container>
-                    <Menu.Item as={LoadFileButton} />
-                    <Menu.Item as={SaveFileAsButton} />
+                    <Menu.Item><Icon name="globe" size="big" /><big>GlOWLbus</big></Menu.Item>
+                    <Menu.Item><LoadFileButton /></Menu.Item>
+                    <Menu.Item><SaveFileAsButton /></Menu.Item>
                 </Container>
             </Menu>
-            <LoadingOverlay active={dialogVisible} style={{ backgroundColor: "#A5D8DD", padding: 0, margin: 0, height: "calc(100% - 40px)" }}>
+            <LoadingOverlay active={dialogVisible} style={{ backgroundColor: "#A5D8DD", padding: 0, margin: 0, height: "calc(100% - 54px)" }}>
                 <Container fluid style={{ width: "90%", height: "100%", backgroundColor: "transparent" }}>
                     {typeof path === "undefined" ? <LoadFile /> : <EditFile />}
                     <div style={errorMessageStyle}>

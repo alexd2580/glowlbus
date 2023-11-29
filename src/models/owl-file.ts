@@ -227,6 +227,8 @@ export class OwlFile {
   }
 
   clear() {
+    this.path.next(undefined);
+
     this.klasses.clear();
     this.builtins.clear();
     this.relationFunctions.clear();
@@ -325,7 +327,7 @@ export class OwlFile {
     this.path.next(path);
     this.fileContent = content;
 
-    const analyzedData = runPython("load_owl(path, view)", { path, view: content });
+    const analyzedData = await runPython("load_owl(path, view)", { path, view: content });
     this.baseIri = analyzedData.get("base_iri");
     (analyzedData.get("classes") as Map<string, any>[]).map(klassFromDeserialized).forEach(klass => this.klasses.set(klass.name, klass));
     (analyzedData.get("rules") as Map<string, any>[]).map(ruleFromDeserialized).forEach(rule => this.importRule(rule));
@@ -369,7 +371,7 @@ export class OwlFile {
     return { type: "datavalue", name, args }; // Is this actually a datavalue?
   }
 
-  serialize(): Uint8Array | undefined {
+  async serialize(): Promise<Uint8Array | undefined> {
     const rules = this.rules.getValues().map(rule => ({
       label: rule.label,
       enabled: rule.enabled,
@@ -380,7 +382,7 @@ export class OwlFile {
       head: rule.implicationIds.map(this.serializeImplication.bind(this)),
     }));
 
-    const result = runPython(
+    const result = await runPython(
       "save_rules(base_iri, rules, old_data)",
       { base_iri: this.baseIri, rules, old_data: this.fileContent },
     );
